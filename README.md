@@ -35,7 +35,7 @@ There are great tools for *one* half of this problem, but nothing local-first th
 | --- | --- |
 | **tok/s** | Output tokens ÷ generation time. Ollama reports server-side eval timing; OpenAI-compatible backends are timed client-side from the token stream. Excludes prompt processing and model load. |
 | **TTFT** | Wall-clock time to the first streamed token (minus model-load time where the runner reports it). |
-| **Memory** | Resident model size when the runner exposes it (Ollama `/api/ps`, LM Studio `/api/v0`), plus a best-effort peak-RSS sample of the backend's processes. |
+| **Memory** | Two numbers, labeled: **Memory** = resident model size the runner reports (Ollama `/api/ps`, LM Studio `/api/v0`); **Peak** = peak process-RSS *growth* of the backend, sampled across the whole run (load + speed + every quality task), not one call. Best-effort — on unified-memory Macs weights live in Metal, so Peak can read low. (Generations are single-turn, so Peak isn't a growing multi-turn-session watermark.) |
 | **Quality** | 31 deterministically-graded tasks across math, reasoning, factual recall, instruction-following/structured-output, extraction, and code understanding. Optional **LLM-as-judge** adds open-ended tasks (summaries, email, haiku, explanations). |
 | **Value** | A composite 0–100 score blending quality, tok/s, and memory (normalised *within your run*), so homebench can call the **🏆 best model for your laptop** — not just rank them. |
 
