@@ -21,6 +21,7 @@ from .report import (
     fmt_ttft,
     rank_reports,
     _memory_display,
+    _peak_display,
 )
 from .runner import (
     EV_MODEL_DONE,
@@ -80,23 +81,24 @@ class PlainReporter:
         table.add_column("tok/s", justify="right", style="green")
         table.add_column("TTFT", justify="right")
         table.add_column("Memory", justify="right")
+        table.add_column("Peak", justify="right", style="dim")
 
         done = [self.reports[n] for n in self.order if n in self.reports]
         pending = [n for n in self.order if n not in self.reports]
         for r in rank_reports(done):
             if r.error:
                 table.add_row(r.model.name, Text("error", style="red"),
-                              "–", "–", "–", "–", "–")
+                              "–", "–", "–", "–", "–", "–")
                 continue
             passed = f"{r.tasks_passed}/{len(r.task_results)}" if r.task_results else "–"
             table.add_row(
                 r.model.name, Text("done", style="green"),
                 fmt_quality(r.quality_score), passed,
                 fmt_tps(r.speed.tokens_per_sec), fmt_ttft(r.speed.ttft_s),
-                _memory_display(r),
+                _memory_display(r), _peak_display(r),
             )
         for n in pending:
-            table.add_row(n, self._status_text(n), "–", "–", "–", "–", "–")
+            table.add_row(n, self._status_text(n), "–", "–", "–", "–", "–", "–")
 
         header = Text("homebench — benchmarking local models", style="bold magenta")
         return Group(header, table)

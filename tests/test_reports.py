@@ -86,6 +86,49 @@ def test_html_report_is_self_contained_and_populated():
     assert html.count('class="fill') >= 2
 
 
+GIB = 1024 ** 3
+
+
+def _report_with_peak(name, peak_bytes):
+    from homebench.models import (
+        MemoryMetrics, ModelInfo, ModelReport, SpeedMetrics, TaskResult,
+    )
+    r = ModelReport(model=ModelInfo(name, "ollama", size_bytes=2 * GIB,
+                                    parameter_size="3B"))
+    r.speed = SpeedMetrics(tokens_per_sec=20.0, ttft_s=0.1)
+    r.memory = MemoryMetrics(size_bytes=2 * GIB, rss_peak_bytes=peak_bytes)
+    r.task_results = [TaskResult("t", "math", 1.0, True)]
+    return r
+
+
+def test_peak_surfaced_in_all_tables():
+    from homebench.report import (
+        _peak_display, leaderboard_table, to_html, to_markdown,
+    )
+    res = BenchmarkResult(provider="ollama",
+                          reports=[_report_with_peak("m", 3 * GIB)])
+    headers = [str(c.header) for c in leaderboard_table(res).columns]
+    assert "Peak" in headers and "Memory" in headers
+
+    md = to_markdown(res)
+    assert "| Peak |" in md and "3.0 GB" in md
+
+    html = to_html(res)
+    assert ">Peak</th>" in html and "3.0 GB" in html
+
+    # resident (Memory) still shown separately; peak "–" when unmeasured
+    assert _peak_display(_report_with_peak("x", 0)) == "–"
+    assert _peak_display(_report_with_peak("y", 3 * GIB)) == "3.0 GB"
+
+
+def test_runner_samples_peak_across_run():
+    provider = FakeProvider()
+    runner = Runner(provider, RunConfig(sample_rss=True, use_cache=False))
+    result = runner.run([provider.list_models()[0]])
+    peak = result.reports[0].memory.rss_peak_bytes
+    assert isinstance(peak, int) and peak >= 0   # best-effort; 0 if no procs
+
+
 def test_html_handles_error_rows():
     from homebench.models import ModelInfo, ModelReport
     result = BenchmarkResult(provider="ollama")

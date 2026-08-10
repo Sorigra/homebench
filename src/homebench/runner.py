@@ -152,6 +152,12 @@ class Runner:
     def _run_model(self, model: ModelInfo, observer: Observer) -> ModelReport:
         report = ModelReport(model=model)
         cfg = self.config
+        # Sample RSS across the WHOLE per-model run (load + speed + every quality
+        # generation) so the reported peak reflects sustained use, not a single
+        # call. Baseline is captured before the model loads.
+        sampler = RSSSampler(name_contains=self.provider.process_hint) if cfg.sample_rss else None
+        if sampler is not None:
+            sampler.__enter__()
         try:
             if cfg.warmup:
                 _emit(observer, EV_PHASE, model=model.name, phase="warmup")
@@ -170,6 +176,11 @@ class Runner:
         except ProviderError as exc:
             report.error = str(exc)
             _emit(observer, EV_PHASE, model=model.name, phase="error", note=str(exc))
+        finally:
+            if sampler is not None:
+                sampler.__exit__()
+                report.memory.rss_peak_bytes = max(report.memory.rss_peak_bytes,
+                                                   sampler.delta_bytes)
         return report
 
     # ------------------------------------------------------------------
@@ -177,11 +188,7 @@ class Runner:
         cfg = self.config
         runs: List[SpeedMetrics] = []
         mem = MemoryMetrics()
-        rss_peak_delta = 0
         for _ in range(max(1, cfg.repeat)):
-            sampler = RSSSampler(name_contains=self.provider.process_hint) if cfg.sample_rss else None
-            if sampler is not None:
-                sampler.__enter__()
             gen = self.provider.generate(
                 model,
                 cfg.speed_prompt,
@@ -190,9 +197,6 @@ class Runner:
                 seed=cfg.seed,
                 timeout=cfg.timeout,
             )
-            if sampler is not None:
-                sampler.__exit__()
-                rss_peak_delta = max(rss_peak_delta, sampler.delta_bytes)
             runs.append(gen.speed)
 
         # Keep the best (highest tokens/sec) run as the representative sample;
@@ -200,11 +204,11 @@ class Runner:
         best = max(runs, key=lambda s: s.tokens_per_sec)
         best.ttft_s = statistics.median(r.ttft_s for r in runs)
 
-        # Memory: provider view is authoritative; RSS delta supplements it.
+        # Resident memory: the provider's view (RSS peak is sampled per-model in
+        # _run_model, spanning the whole run).
         pmem = self.provider.memory(model)
         mem.size_bytes = pmem.size_bytes
         mem.vram_bytes = pmem.vram_bytes
-        mem.rss_peak_bytes = rss_peak_delta
         return best, mem
 
     # ------------------------------------------------------------------
