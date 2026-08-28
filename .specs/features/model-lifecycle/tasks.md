@@ -548,13 +548,19 @@ definido **ou** llamacpp detectado alcançável). Sem esse portão, quem roda s�
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] O módulo inteiro é pulado sem `HOMEBENCH_LIVE=1` — `pytest -q` normal segue em 162 + novos, e o **CI não o executa**
-- [ ] Ciclo completo contra `:8080` e `:8081`: estado inicial → load → `loaded` → geração curta → unload → estado original restaurado
-- [ ] Usa o menor modelo disponível, não um fixo hardcoded
-- [ ] Registra `build_info` de cada host e **falha com aviso claro se os builds divergirem** (hoje `b10615` vs `b10664`), porque isso invalida a comparação Vulkan vs ROCm
-- [ ] O teste restaura o estado inicial mesmo em caso de falha (`try/finally`)
-- [ ] Gate: `.venv/bin/python -m pytest -q && .venv/bin/python -m build`
-- [ ] Total ≥ 162 + 104 testes passam sem a env var
+- [x] O módulo inteiro é pulado sem `HOMEBENCH_LIVE=1` — `pytest -q` normal segue em 162 + novos, e o **CI não o executa** (`.github/workflows/ci.yml` roda `pytest -q` puro, sem env)
+- [x] Ciclo completo contra `:8080` e `:8081`: estado inicial → load → `loaded` → geração curta → unload → estado original restaurado
+- [x] Usa o menor modelo disponível, não um fixo hardcoded (`-m <path>` do argv resolvido + `os.path.getsize`)
+- [x] Registra `build_info` de cada host e **falha com aviso claro se os builds divergirem** (hoje `b10615` vs `b10664`), porque isso invalida a comparação Vulkan vs ROCm
+- [x] O teste restaura o estado inicial mesmo em caso de falha (`try/finally`)
+- [x] Gate: `.venv/bin/python -m pytest -q && .venv/bin/python -m build`
+- [x] Total ≥ 162 + 104 testes passam sem a env var — 349 passam, 5 pulados
+
+**Nota:** escrito e verificado como pulado, mas **não executado ao vivo** nesta sessão, por
+instrução explícita: os containers servem Open WebUI + Traefik em produção e descarregar um
+modelo poderia derrubar a sessão de alguém. A execução ao vivo exige confirmação do usuário.
+Coletado com `HOMEBENCH_LIVE=1 pytest --collect-only` (5 testes, sem rede) para provar que o
+caminho ao vivo importa e parametriza corretamente.
 
 **Tests**: integration
 **Gate**: build
