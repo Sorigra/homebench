@@ -47,6 +47,11 @@ def build_parser() -> argparse.ArgumentParser:
                         help="tokens to generate for the speed probe (default: 100)")
         sp.add_argument("--repeat", type=int, default=1,
                         help="speed-probe repetitions, best kept (default: 1)")
+        sp.add_argument("--depths", default="0,8192,32768",
+                        help="comma-separated context depths (in tokens) to sweep "
+                             "the speed probe across, in order (default: "
+                             "0,8192,32768; pass 0 alone for the single pre-sweep "
+                             "measurement)")
         sp.add_argument("--timeout", type=float, default=300.0,
                         help="per-request timeout in seconds (default: 300)")
         sp.add_argument("--seed", type=int, default=42,
@@ -371,7 +376,7 @@ def _prepare_router_models(provider, models, args, console: Console):
     return True, prepare
 
 
-def _build_runner(provider, args, prepare_hook=None) -> Runner:
+def _build_runner(provider, args, prepare_hook=None, depths=None) -> Runner:
     judge = None
     include_open = False
     if getattr(args, "judge", None):
@@ -384,6 +389,7 @@ def _build_runner(provider, args, prepare_hook=None) -> Runner:
         max_tokens=args.max_tokens,
         speed_max_tokens=args.speed_tokens,
         repeat=max(1, args.repeat),
+        depths=depths if depths is not None else [0, 8192, 32768],
         timeout=args.timeout,
         seed=args.seed,
         warmup=not args.no_warmup,
@@ -758,15 +764,22 @@ def cmd_throughput(args, console: Console) -> int:
 
 
 def cmd_run(args, console: Console) -> int:
+    from .metrics.depth import parse_depths
     from .quality import PackError
 
     try:
+        # Validated first, before the provider is touched or any model is
+        # selected: an invalid --depths must abort with nothing loaded.
+        depths = parse_depths(getattr(args, "depths", "0,8192,32768"))
         provider = _resolve_provider(args, console)
         models = _select_models(provider, args, console)
         proceed, prepare_hook = _prepare_router_models(provider, models, args, console)
         if not proceed:
             return 1
-        runner = _build_runner(provider, args, prepare_hook=prepare_hook)
+        runner = _build_runner(provider, args, prepare_hook=prepare_hook, depths=depths)
+    except ValueError as exc:
+        console.print(f"[red]error:[/red] {exc}")
+        return 1
     except ProviderError as exc:
         console.print(f"[red]error:[/red] {exc}")
         return 1

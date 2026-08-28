@@ -436,7 +436,7 @@ T17
 
 ---
 
-### T16: Flag `--depths` na CLI
+### T16: Flag `--depths` na CLI ✅ Complete
 
 **What**: expor a flag no subcomando `run`, validando antes de tocar em qualquer modelo.
 **Where**: `src/homebench/cli.py`
@@ -447,12 +447,15 @@ T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `--depths 0` reproduz o comportamento anterior à feature
-- [ ] `--depths 0,8192,32768` é o default quando a flag é omitida
-- [ ] Valor inválido aborta com mensagem citando o valor, **antes** de qualquer carga de modelo
-- [ ] `--help` documenta a flag
-- [ ] Gate check passes: `.venv/bin/python -m pytest -q tests/test_cli.py tests/test_cli_lifecycle.py`
-- [ ] Test count: 446 + 5 = 451 testes passam
+- [x] `--depths 0` reproduz o comportamento anterior à feature
+- [x] `--depths 0,8192,32768` é o default quando a flag é omitida
+- [x] Valor inválido aborta com mensagem citando o valor, **antes** de qualquer carga de modelo
+- [x] `--help` documenta a flag
+- [x] Gate check passes: `.venv/bin/python -m pytest -q tests/test_cli.py tests/test_cli_lifecycle.py`
+- [x] Test count: 452 testes passam (446 + 6; a estimativa original previa 5 — a
+      sexta é um teste de parsing isolado do valor customizado de `--depths`,
+      camada distinta dos testes de `cmd_run`, mantido por cobrir a fronteira
+      do argparse separadamente — ver corpo do commit)
 
 **Tests**: unit
 **Gate**: quick
