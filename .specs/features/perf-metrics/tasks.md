@@ -414,7 +414,7 @@ T17
 
 ---
 
-### T15: Tabela da TUI Textual
+### T15: Tabela da TUI Textual ✅ Complete
 
 **What**: mesma mudança de colunas em `tui/app.py`.
 **Where**: `src/homebench/tui/app.py`
@@ -425,10 +425,10 @@ T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Colunas novas presentes e preenchidas
-- [ ] `test_tui_runs_and_fills_leaderboard` segue passando com as linhas por profundidade
-- [ ] Gate check passes: `.venv/bin/python -m pytest -q tests/test_tui.py`
-- [ ] Test count: 444 + 2 = 446 testes passam
+- [x] Colunas novas presentes e preenchidas
+- [x] `test_tui_runs_and_fills_leaderboard` segue passando com as linhas por profundidade
+- [x] Gate check passes: `.venv/bin/python -m pytest -q tests/test_tui.py`
+- [x] Test count: 444 + 2 = 446 testes passam
 
 **Tests**: unit
 **Gate**: quick
