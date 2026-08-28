@@ -11,14 +11,15 @@ tiny host-normaliser is the same pattern ``providers/ollama.py`` already uses.
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 
 from ..providers.base import ProviderError
-from .models import RouterInfo
+from .models import ModelState, RouterInfo
 
 _PROPS_TIMEOUT = 10.0
+_LIST_TIMEOUT = 10.0
 
 
 def normalize_host(host: str, default: str) -> str:
@@ -88,3 +89,22 @@ class LlamaRouterClient:
             return self.props().role == "router"
         except ProviderError:
             return False
+
+    # ------------------------------------------------------------------
+    def list_models(self) -> List[ModelState]:
+        """``GET /v1/models`` -> resolved state and argv for every model.
+
+        The router reports ``status.args`` (resolved argv) even for models that
+        are ``unloaded``, so that field is populated regardless of state.
+        """
+        data = self._get_json("/v1/models", _LIST_TIMEOUT)
+        entries = data.get("data", []) if isinstance(data, dict) else []
+        return [
+            ModelState.from_dict(m)
+            for m in entries
+            if isinstance(m, dict) and m.get("id")
+        ]
+
+    def loaded_models(self) -> List[ModelState]:
+        """Just the models currently ``loaded``."""
+        return [m for m in self.list_models() if m.status == "loaded"]

@@ -164,13 +164,13 @@ T15 → T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `list_models()` devolve `List[ModelState]` com `status`, `args`, `preset`, `source`
-- [ ] `args` é preenchido também para modelos `unloaded` (o router expõe o preset a frio)
-- [ ] `loaded_models()` filtra `status == "loaded"`
-- [ ] 401 e falha de rede levantam `ProviderError`
-- [ ] Fixture do teste usa o payload real capturado do router (17 modelos)
-- [ ] Gate: `.venv/bin/python -m pytest -q`
-- [ ] Total ≥ 162 + 18 testes passam
+- [x] `list_models()` devolve `List[ModelState]` com `status`, `args`, `preset`, `source`
+- [x] `args` é preenchido também para modelos `unloaded` (o router expõe o preset a frio)
+- [x] `loaded_models()` filtra `status == "loaded"`
+- [x] 401 e falha de rede levantam `ProviderError`
+- [~] Fixture do teste usa o payload real capturado do router (17 modelos) — design.md não traz o payload capturado; fixture de 17 modelos reconstruída fielmente do contrato AD-001
+- [x] Gate: `.venv/bin/python -m pytest -q`
+- [x] Total ≥ 162 + 18 testes passam — 196 passam
 
 **Tests**: unit
 **Gate**: quick
