@@ -152,10 +152,39 @@ _OVERFLOW_HINTS = (
     "too many tokens",
 )
 
+# A generation timeout is local to the depth being measured.  Long prompts can
+# legitimately take longer than the configured request timeout even when the
+# model and router remain healthy; throwing away shallower, completed points in
+# that case makes the sweep less useful and misrepresents a partial run as a
+# model-wide failure.
+_TIMEOUT_HINTS = (
+    "timed out",
+    "timeout",
+)
+
+# These failures kill the per-model server instance, so no later depth can be
+# attempted.  They still happen *during one depth*, though, and must not erase
+# shallower points that completed successfully.
+_TERMINAL_DEPTH_HINTS = (
+    "errordevicelost",
+    "device lost",
+)
+
 
 def _is_context_overflow(message: str) -> bool:
     lowered = message.lower()
     return any(hint in lowered for hint in _OVERFLOW_HINTS)
+
+
+def _is_depth_local_failure(message: str) -> bool:
+    lowered = message.lower()
+    return (_is_context_overflow(message)
+            or any(hint in lowered for hint in _TIMEOUT_HINTS))
+
+
+def _is_terminal_depth_failure(message: str) -> bool:
+    lowered = message.lower()
+    return any(hint in lowered for hint in _TERMINAL_DEPTH_HINTS)
 
 
 # SPEC_DEVIATION: design.md types measure_at_depths as -> List[DepthMetrics].
@@ -202,10 +231,11 @@ def measure_at_depths(
     cache read (PERF-13). ``cfg.repeat`` repeats *within* a depth and the
     fastest run is kept, so the sweep itself runs once.
 
-    A depth the model cannot hold is skipped with its reason recorded, and the
-    remaining depths still run (PERF-14). Any other ``ProviderError`` is
-    re-raised: it fails this model and only this model, the way the runner
-    already isolates a backend that went away (MLC-11).
+    A depth the model cannot hold, or whose generation exceeds the configured
+    timeout, is skipped with its reason recorded, and the remaining depths
+    still run (PERF-14). Any other ``ProviderError`` is re-raised: it fails this
+    model and only this model, the way the runner already isolates a backend
+    that went away (MLC-11).
 
     ``on_depth`` is called with each depth before it is measured. The
     default sweep is slow, and the renderers use it to show which depth is
@@ -234,10 +264,14 @@ def measure_at_depths(
                 for _ in range(max(1, cfg.repeat))
             ]
         except ProviderError as exc:
-            if not _is_context_overflow(str(exc)):
+            message = str(exc)
+            terminal = _is_terminal_depth_failure(message)
+            if not (_is_depth_local_failure(message) or terminal):
                 raise
-            sweep.points.append(DepthMetrics(depth_requested=depth, skipped=str(exc)))
+            sweep.points.append(DepthMetrics(depth_requested=depth, skipped=message))
             _note(warn, f"{model}: depth {depth} skipped: {exc}")
+            if terminal:
+                break
             continue
 
         # Keep the fastest run as the representative sample and report the

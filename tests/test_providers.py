@@ -370,3 +370,19 @@ def test_in_stream_error_after_partial_output_still_raises(monkeypatch):
         OpenAICompatibleProvider().generate("m", "hi")
 
     assert "instance died" in str(excinfo.value)
+
+
+def test_http_error_preserves_server_message(httpx_mock):
+    httpx_mock.add_response(
+        method="POST",
+        url="http://localhost:8000/v1/chat/completions",
+        status_code=400,
+        json={"error": {"message": "request exceeds the available context size"}},
+    )
+
+    with pytest.raises(ProviderError) as excinfo:
+        OpenAICompatibleProvider().generate("m", "hi")
+
+    message = str(excinfo.value)
+    assert "400 Bad Request" in message
+    assert "exceeds the available context size" in message

@@ -117,7 +117,14 @@ class OpenAICompatibleProvider(Provider):
                 "POST", f"{self.host}/v1/chat/completions",
                 json=payload, headers=self._headers(), timeout=timeout,
             ) as resp:
-                resp.raise_for_status()
+                try:
+                    resp.raise_for_status()
+                except httpx.HTTPStatusError:
+                    # Streaming responses do not expose their body until it is
+                    # consumed.  Keep llama.cpp's useful error text before the
+                    # status exception leaves this context manager.
+                    resp.read()
+                    raise
                 for line in resp.iter_lines():
                     if not line or not line.startswith("data:"):
                         continue
@@ -160,6 +167,12 @@ class OpenAICompatibleProvider(Provider):
                                 on_token(piece)
                         if thought:
                             reasoning_deltas += 1
+        except httpx.HTTPStatusError as exc:
+            detail = _http_error_detail(exc.response)
+            suffix = f": {detail}" if detail else ""
+            raise ProviderError(
+                f"{self.name} generate failed for {model!r}: {exc}{suffix}"
+            )
         except httpx.HTTPError as exc:
             raise ProviderError(f"{self.name} generate failed for {model!r}: {exc}")
 
@@ -209,3 +222,14 @@ def _stream_error(err) -> str:
     if isinstance(err, dict):
         return str(err.get("message") or err)
     return str(err)
+
+
+def _http_error_detail(response: httpx.Response) -> str:
+    """Keep a server's useful error message when the status is non-2xx."""
+    try:
+        body = response.json()
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return response.text.strip()
+    if isinstance(body, dict) and "error" in body:
+        return _stream_error(body["error"])
+    return str(body)

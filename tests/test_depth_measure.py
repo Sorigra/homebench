@@ -154,6 +154,47 @@ def test_a_context_overflow_skips_only_that_depth():
     assert [n for n in notes if "32768" in n]
 
 
+def test_a_generation_timeout_skips_only_that_depth():
+    notes = []
+
+    def respond(i, prompt):
+        if _depth_of(prompt) == 32768:
+            raise ProviderError("llamacpp generate failed for 'm': timed out")
+        return _result(prompt_tokens=22, decode=95.1)
+
+    sweep = measure_at_depths(_Recorder(respond), "m", [0, 32768, 8192],
+                              cfg=_cfg(), warn=notes.append)
+
+    assert [pt.depth_requested for pt in sweep.points] == [0, 32768, 8192]
+    assert sweep.points[0].decode_tps == 95.1
+    assert "timed out" in sweep.points[1].skipped
+    assert sweep.points[2].decode_tps == 95.1
+    assert sweep.speed is not None
+    assert sweep.speed.tokens_per_sec == 95.1
+    assert [n for n in notes if "32768" in n]
+
+
+def test_device_loss_preserves_completed_depths_and_stops_the_sweep():
+    seen = []
+
+    def respond(i, prompt):
+        depth = _depth_of(prompt)
+        seen.append(depth)
+        if depth == 32768:
+            raise ProviderError("decode failed: vk::Queue::submit: ErrorDeviceLost")
+        return _result(prompt_tokens=22, decode=95.1)
+
+    sweep = measure_at_depths(_Recorder(respond), "m", [0, 8192, 32768, 0],
+                              cfg=_cfg())
+
+    assert seen == [0, 8192, 32768]
+    assert [pt.depth_requested for pt in sweep.points] == [0, 8192, 32768]
+    assert sweep.points[0].decode_tps == 95.1
+    assert sweep.points[1].decode_tps == 95.1
+    assert "ErrorDeviceLost" in sweep.points[2].skipped
+    assert sweep.speed is not None
+
+
 def test_any_other_provider_error_propagates():
     def respond(i, prompt):
         raise ProviderError("connection refused: router restarting")

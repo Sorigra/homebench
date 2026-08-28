@@ -42,6 +42,22 @@ class _NoRoom(_DepthAware):
         return super().generate(model, prompt, **kw)
 
 
+class _SlowDeepPrompt(_DepthAware):
+    """Times out only on the deepest prompt while the model stays healthy."""
+
+    def generate(self, model, prompt, **kw):
+        if len(prompt.split()) >= 10_000:
+            raise ProviderError("llamacpp generate failed for 'fast:1b': timed out")
+        return super().generate(model, prompt, **kw)
+
+
+class _DeviceLostDeepPrompt(_DepthAware):
+    def generate(self, model, prompt, **kw):
+        if len(prompt.split()) >= 10_000:
+            raise ProviderError("decode failed: vk::Queue::submit: ErrorDeviceLost")
+        return super().generate(model, prompt, **kw)
+
+
 def test_run_config_sweeps_three_depths_by_default():
     cfg = RunConfig()
     assert cfg.depths == [0, 8192, 32768]
@@ -83,3 +99,22 @@ def test_a_skipped_depth_lands_on_the_report_warnings():
     notes = [d["note"] for ev, d in seen
              if ev == "phase" and d.get("phase") == "warning"]
     assert notes == report.warnings
+
+
+def test_a_timed_out_depth_does_not_fail_the_whole_model():
+    report, _ = _run(_SlowDeepPrompt(), depths=[0, 32768, 8192])
+
+    assert report.error is None
+    assert report.depth_results[0].decode_tps == 95.1
+    assert "timed out" in report.depth_results[1].skipped
+    assert report.depth_results[2].decode_tps > 0
+
+
+def test_device_loss_at_deep_prompt_preserves_shallow_results():
+    report, _ = _run(_DeviceLostDeepPrompt(), depths=[0, 8192, 32768])
+
+    assert report.error is None
+    assert [p.depth_requested for p in report.depth_results] == [0, 8192, 32768]
+    assert report.depth_results[0].decode_tps > 0
+    assert report.depth_results[1].decode_tps > 0
+    assert "ErrorDeviceLost" in report.depth_results[2].skipped
