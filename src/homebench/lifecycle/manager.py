@@ -11,10 +11,14 @@ anything is unloaded.
 
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import Any, Callable, List, Optional
 
 from ..providers.base import ProviderError
-from .models import LifecyclePlan, LoadParams
+from .models import LifecycleOutcome, LifecyclePlan, LoadParams
+
+#: Asked to approve a plan before anything is unloaded. The CLI passes a Rich
+#: prompt, the future web API passes its own, tests pass a lambda (TD-04).
+Confirmer = Callable[[LifecyclePlan], bool]
 
 
 def _is_sublist(needle: List[str], haystack: List[str]) -> bool:
@@ -86,3 +90,56 @@ class ModelLifecycleManager:
             needs_load=needs_load,
             reason=reason,
         )
+
+    # ------------------------------------------------------------------
+    def ensure_only(
+        self,
+        model: str,
+        params: LoadParams,
+        confirm: Confirmer,
+    ) -> LifecycleOutcome:
+        """Apply :meth:`plan` so that ``model`` is the only resident model.
+
+        ``confirm`` is asked once, with the plan, before anything is unloaded,
+        and only when there is something to unload. Returning False aborts:
+        nothing is unloaded, nothing is loaded, and the outcome is flagged
+        ``aborted`` so the caller does not benchmark (MLC-08).
+
+        A load that fails or times out raises :class:`ProviderError`; the
+        target is unloaded first so the module never leaves a half-loaded
+        model behind (MLC-06).
+        """
+        plan = self.plan(model, params)
+
+        if plan.to_unload and not confirm(plan):
+            return LifecycleOutcome(plan=plan, aborted=True)
+
+        for victim in plan.to_unload:
+            self.client.unload(victim)
+
+        if plan.needs_load:
+            self.client.load(model, list(params.extra_args) or None)
+        try:
+            self.client.wait_until_loaded(model)
+        except ProviderError:
+            if plan.needs_load:
+                self._best_effort_unload(model)
+            raise
+
+        return LifecycleOutcome(
+            plan=plan,
+            effective_args=self._effective_args(model),
+            unloaded=list(plan.to_unload),
+        )
+
+    # ------------------------------------------------------------------
+    def _effective_args(self, model: str) -> List[str]:
+        """The argv the router resolved for ``model`` after loading (MLC-09)."""
+        state = next((m for m in self.client.list_models() if m.id == model), None)
+        return list(state.args) if state is not None else []
+
+    def _best_effort_unload(self, model: str) -> None:
+        try:
+            self.client.unload(model)
+        except ProviderError:
+            pass

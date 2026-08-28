@@ -112,12 +112,16 @@ class LifecycleOutcome:
     plan: LifecyclePlan = field(default_factory=LifecyclePlan)
     effective_args: List[str] = field(default_factory=list)
     unloaded: List[str] = field(default_factory=list)
+    #: True when the user declined the unload confirmation: nothing was
+    #: unloaded, nothing was loaded, and the caller must not benchmark.
+    aborted: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "plan": self.plan.to_dict(),
             "effective_args": list(self.effective_args),
             "unloaded": list(self.unloaded),
+            "aborted": self.aborted,
         }
 
     @classmethod
@@ -127,4 +131,5 @@ class LifecycleOutcome:
             plan=LifecyclePlan.from_dict(d.get("plan", {})),
             effective_args=list(d.get("effective_args", []) or []),
             unloaded=list(d.get("unloaded", []) or []),
+            aborted=bool(d.get("aborted", False)),
         )

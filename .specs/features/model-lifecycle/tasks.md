@@ -342,13 +342,17 @@ design) porque a heurística de `-ngl` precisa do tamanho do arquivo. Sem `hardw
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `ensure_only(model, params, confirm)` recebe `confirm` como callable e **nunca** chama `input()`
-- [ ] `confirm` retornando `False` aborta sem descarregar nada e sem carregar (MLC-08)
-- [ ] Plano com `to_unload` vazio não chama `confirm`
-- [ ] Falha de carga propaga `ProviderError` e não deixa carga parcial atribuída ao módulo (MLC-06)
-- [ ] Devolve `LifecycleOutcome` com os `args` efetivos pós-carga
-- [ ] Gate: `.venv/bin/python -m pytest -q`
-- [ ] Total ≥ 162 + 68 testes passam
+- [x] `ensure_only(model, params, confirm)` recebe `confirm` como callable e **nunca** chama `input()`
+- [x] `confirm` retornando `False` aborta sem descarregar nada e sem carregar (MLC-08)
+- [x] Plano com `to_unload` vazio não chama `confirm`
+- [x] Falha de carga propaga `ProviderError` e não deixa carga parcial atribuída ao módulo (MLC-06)
+- [x] Devolve `LifecycleOutcome` com os `args` efetivos pós-carga
+- [x] Gate: `.venv/bin/python -m pytest -q`
+- [x] Total ≥ 162 + 68 testes passam — 252 passam
+
+**Nota:** `LifecycleOutcome` ganhou o campo `aborted: bool = False` (não previsto no design).
+É como a recusa da confirmação chega ao chamador sem virar exceção: `aborted=True`, nada
+descarregado, nada carregado. `from_dict` continua tolerante a runs antigos.
 
 **Tests**: unit
 **Gate**: quick
