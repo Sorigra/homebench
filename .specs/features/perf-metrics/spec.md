@@ -168,7 +168,7 @@ já salvos em `~/.homebench/runs/`.
 | PERF-10 | P3: varredura de profundidade | Design | Pending |
 | PERF-11 | P3: varredura de profundidade | Design | Pending |
 | PERF-12 | P3: varredura de profundidade | Design | Pending |
-| PERF-13 | P3: varredura de profundidade | Design | Pending |
+| PERF-13 | P3: varredura de profundidade | T2, T6, T9 | Pending |
 | PERF-14 | P3: varredura de profundidade | Design | Pending |
 | PERF-15 | P3: varredura de profundidade | Design | Pending |
 | PERF-16 | P3: compatibilidade e saídas | T1, T2, T17 | Pending |

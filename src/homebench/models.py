@@ -77,6 +77,36 @@ class SpeedMetrics:
 
 
 @dataclass
+class DepthMetrics:
+    """One speed measurement at one prompt-context depth.
+
+    ``depth_requested`` is what the sweep asked for; ``depth_actual`` is what
+    the server actually processed (its ``prompt_n``), which is the number that
+    gets reported -- the synthetic prompt never lands exactly on the target.
+    """
+
+    depth_requested: int
+    depth_actual: int = 0
+    #: prompt-processing rate. ``None`` = unknown, never 0.0.
+    prefill_tps: Optional[float] = None
+    decode_tps: float = 0.0
+    ttft_s: float = 0.0
+    prompt_eval_s: float = 0.0
+    output_tokens: int = 0
+    #: ``timings.cache_n``; anything above 0 means the prefill read reused KV
+    cache_hit_tokens: int = 0
+    #: why this depth could not be measured; ``None`` when it was
+    skipped: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "DepthMetrics":
+        return cls(**_pick(cls, d))
+
+
+@dataclass
 class MemoryMetrics:
     """Memory footprint of a loaded model.
 
@@ -126,6 +156,9 @@ class ModelReport:
     speed: SpeedMetrics = field(default_factory=SpeedMetrics)
     memory: MemoryMetrics = field(default_factory=MemoryMetrics)
     task_results: List[TaskResult] = field(default_factory=list)
+    #: one point per measured context depth. Empty for runs saved before the
+    #: depth sweep existed, and for runs measured at depth 0 only.
+    depth_results: List[DepthMetrics] = field(default_factory=list)
     error: Optional[str] = None
     #: Non-fatal notes for this model (e.g. a best-effort unload that failed).
     #: The run continues; the warning is kept so it reaches the report (MLC-14).
@@ -152,6 +185,7 @@ class ModelReport:
             "tasks_passed": self.tasks_passed,
             "tasks_total": len(self.task_results),
             "task_results": [t.to_dict() for t in self.task_results],
+            "depth_results": [d.to_dict() for d in self.depth_results],
             "error": self.error,
             "warnings": list(self.warnings),
         }
@@ -163,6 +197,8 @@ class ModelReport:
             speed=SpeedMetrics.from_dict(d.get("speed", {})),
             memory=MemoryMetrics.from_dict(d.get("memory", {})),
             task_results=[TaskResult.from_dict(t) for t in d.get("task_results", [])],
+            depth_results=[DepthMetrics.from_dict(x)
+                           for x in (d.get("depth_results") or [])],
             error=d.get("error"),
             warnings=list(d.get("warnings", []) or []),
         )

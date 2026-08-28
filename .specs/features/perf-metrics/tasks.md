@@ -106,7 +106,7 @@ T17
 
 ---
 
-### T2: `DepthMetrics` e `ModelReport.depth_results`
+### T2: `DepthMetrics` e `ModelReport.depth_results` ✅ Complete
 
 **What**: criar o dataclass `DepthMetrics` conforme o design e pendurá-lo em `ModelReport` como lista, com `to_dict`/`from_dict`.
 **Where**: `src/homebench/models.py`
@@ -117,11 +117,11 @@ T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `DepthMetrics` tem os 9 campos do design, com `prefill_tps` e `skipped` opcionais
-- [ ] `ModelReport.depth_results` faz round-trip completo
-- [ ] Um JSON de run salvo **antes** da feature carrega com `depth_results == []`
-- [ ] Gate check passes: `.venv/bin/python -m pytest -q tests/test_runner_report.py tests/test_history.py`
-- [ ] Test count: 381 + 4 = 385 testes passam
+- [x] `DepthMetrics` tem os 9 campos do design, com `prefill_tps` e `skipped` opcionais
+- [x] `ModelReport.depth_results` faz round-trip completo
+- [x] Um JSON de run salvo **antes** da feature carrega com `depth_results == []`
+- [x] Gate check passes: `.venv/bin/python -m pytest -q tests/test_runner_report.py tests/test_history.py`
+- [x] Test count: 381 + 4 = 385 testes passam
 
 **Tests**: unit
 **Gate**: quick

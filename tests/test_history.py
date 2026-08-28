@@ -145,3 +145,36 @@ def test_non_shared_models_ignored():
     base = _rec(1000.0, [("gone", 20.0, 9, 10)])
     new = _rec(2000.0, [("fresh", 5.0, 1, 10)])
     assert history.regressions(base, new) == []
+
+
+def test_pre_feature_run_json_loads_with_empty_depth_results(tmp_path):
+    """A run saved before the depth sweep existed still loads (PERF-16)."""
+    import json
+    import os
+
+    home = str(tmp_path)
+    os.makedirs(os.path.join(home, "runs"))
+    legacy = {
+        "provider": "llamacpp",
+        "started_at": 1000.0,
+        "finished_at": 1001.0,
+        "config": {},
+        "environment": {},
+        "reports": [{
+            "model": {"name": "gemma4-e2b", "provider": "llamacpp"},
+            "speed": {"tokens_per_sec": 95.1, "ttft_s": 0.31},
+            "memory": {"size_bytes": 2_000_000_000},
+            "task_results": [],
+            "error": None,
+        }],
+    }
+    with open(os.path.join(home, "runs", "20250101-000000.json"), "w") as fh:
+        json.dump(legacy, fh)
+
+    runs = list_runs(home=home)
+    assert len(runs) == 1
+    result = BenchmarkResult.from_dict(runs[0].data)
+    assert len(result.reports) == 1
+    report = result.reports[0]
+    assert report.depth_results == []
+    assert report.speed.tokens_per_sec == 95.1   # the old metric still reads

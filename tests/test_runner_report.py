@@ -1,6 +1,6 @@
 import json
 
-from homebench.models import SpeedMetrics
+from homebench.models import DepthMetrics, ModelInfo, ModelReport, SpeedMetrics
 from homebench.quality import default_suite
 from homebench.report import rank_reports, to_json, to_markdown
 from homebench.runner import RunConfig, Runner
@@ -126,3 +126,56 @@ def test_speed_metrics_round_trip_preserves_new_fields():
 
     unknown = SpeedMetrics(prefill_tps=None, timings_source="client")
     assert SpeedMetrics.from_dict(unknown.to_dict()).prefill_tps is None
+
+
+# =====================================================================
+# DepthMetrics / ModelReport.depth_results (PERF-13, PERF-16)
+# =====================================================================
+def test_depth_metrics_fields_and_defaults():
+    d = DepthMetrics(depth_requested=8192)
+    assert d.depth_requested == 8192
+    assert d.depth_actual == 0
+    assert d.prefill_tps is None       # optional: unknown, not zero
+    assert d.decode_tps == 0.0
+    assert d.ttft_s == 0.0
+    assert d.prompt_eval_s == 0.0
+    assert d.output_tokens == 0
+    assert d.cache_hit_tokens == 0
+    assert d.skipped is None           # optional: measured unless stated
+
+    assert set(d.to_dict()) == {
+        "depth_requested", "depth_actual", "prefill_tps", "decode_tps",
+        "ttft_s", "prompt_eval_s", "output_tokens", "cache_hit_tokens",
+        "skipped",
+    }
+
+
+def test_depth_metrics_round_trip():
+    d = DepthMetrics(depth_requested=32768, depth_actual=32001,
+                     prefill_tps=1809.4, decode_tps=73.2, ttft_s=18.1,
+                     prompt_eval_s=17.7, output_tokens=64, cache_hit_tokens=0,
+                     skipped=None)
+    back = DepthMetrics.from_dict(d.to_dict())
+    assert back == d
+
+    skipped = DepthMetrics(depth_requested=32768,
+                           skipped="context 32768 exceeds the model's window")
+    back = DepthMetrics.from_dict(skipped.to_dict())
+    assert back.skipped == "context 32768 exceeds the model's window"
+    assert back.prefill_tps is None
+
+
+def test_model_report_depth_results_round_trip():
+    report = ModelReport(model=ModelInfo("gemma4-e2b", "llamacpp"))
+    report.depth_results = [
+        DepthMetrics(depth_requested=0, depth_actual=22, prefill_tps=2714.0,
+                     decode_tps=95.1, ttft_s=0.31, output_tokens=12),
+        DepthMetrics(depth_requested=8192, depth_actual=8190, prefill_tps=2100.0,
+                     decode_tps=83.4, ttft_s=4.2, output_tokens=12),
+    ]
+    back = ModelReport.from_dict(report.to_dict())
+    assert len(back.depth_results) == 2
+    assert [p.depth_requested for p in back.depth_results] == [0, 8192]
+    assert [p.depth_actual for p in back.depth_results] == [22, 8190]
+    assert [p.decode_tps for p in back.depth_results] == [95.1, 83.4]
+    assert back.depth_results[0].prefill_tps == 2714.0
