@@ -4,8 +4,14 @@
 **Spec**: `.specs/features/model-lifecycle/spec.md`
 **Diff range**: `84a2d0e..HEAD` (branch `feat/model-lifecycle`, 17 commits, `4c23759..8ea26da`)
 **Verifier**: independent sub-agent (author ≠ verifier), evidence-or-zero
-**Verdict**: ❌ **FAIL** — the P1 MVP guarantee does not hold for a default (3-model) run, and
-4 of 6 listed edge cases plus MLC-15 have no evidence.
+**Verdict**: ❌ **FAIL** — iteration 2 (of max 3). The iteration-1 blocker is **fixed and proven**
+(M16 and its three equivalents are now killed; MLC-01/03/09/11/14 hold for multi-model runs), but
+the discrimination sensor found **2 new surviving mutants inside the fix surface** (M28a, M31) and
+Fix 1 silently **narrowed MLC-08 AC1**. See § Iteration 2 at the end of this file for the current
+state; everything above this line is the iteration-1 report, kept as history.
+
+> **Reading order**: §§ below up to "Summary" = **iteration 1** (2026-08-28, verdict FAIL).
+> § "Iteration 2 — re-verification" at the end supersedes it where they disagree.
 
 ---
 
@@ -292,3 +298,255 @@ guards (`to_dict` allowlist and `_COMMANDS`) — all of them empirically discrim
 **Issues found**: see Fix Plans 1–7; Fix 1 is the blocker.
 
 **Next steps**: route Fix 1–4 to an implementer, re-verify (iteration 1 of max 3).
+
+---
+---
+
+# Iteration 2 — re-verification (2026-08-28)
+
+**Diff range re-verified**: `8ea26da..HEAD` (fix-only; `16ced38` in that range is the iteration-1
+report + lessons, no product code). Full feature range `84a2d0e..HEAD`.
+**Fix commits**: `a374c5b` (Fix 6 → MLC-14 AC2) · `260d110` (Fix 1 → MLC-01/03/09, the blocker) ·
+`211d957` (Fix 4 → MLC-11, MLC-06).
+**Verifier**: fresh independent sub-agent, coverage re-derived from `spec.md`, evidence-or-zero.
+**Verdict**: ❌ **FAIL** — blocker fixed, 2 new surviving mutants + 1 undocumented AC narrowing.
+
+## What changed in the product
+
+`Runner` gained a `prepare_model` hook (`src/homebench/runner.py:118`, called at
+`:182-186` before warmup, inside the per-model `try`), `_prepared_params` is merged into
+`result.config["load_params"]` at `:150-153`, `ModelReport.warnings` was added
+(`src/homebench/models.py:122,148,159`), the best-effort unload failure is lifted onto the report
+at `src/homebench/runner.py:200-206`, `plainui` prints it at `src/homebench/plainui.py:130-132`,
+and `_prepare_router_models` now returns `(proceed, prepare_hook)` with a per-model closure
+(`src/homebench/cli.py:310-358`).
+
+---
+
+## Discrimination Sensor — iteration 2
+
+**Depth**: P0-full (16 fresh behaviour-level mutations, all aimed at the fix surface).
+**Method**: temporary `git worktree add <scratchpad>/wt HEAD`, `PYTHONPATH` pointed at the scratch
+`src/`, full suite per mutation, original restored in a `finally` with a re-read assertion. The
+real tree was never written to. `git stash` was not used. Scratch baseline in the worktree:
+370 passed, 5 skipped — identical to the real tree.
+
+| # | File | Mutation | Killed? | Killed by |
+| --- | --- | --- | --- | --- |
+| **M27** | `runner.py:182` | **M16 equivalent** — hook invoked only for the **first** model of the run | ✅ Killed (5 failures) | `test_hook_is_called_once_per_model_in_order`, `test_every_model_records_its_effective_load_params_not_just_the_first`, `test_prepare_phase_event_is_emitted_per_model`, +2 |
+| **M27b** | `runner.py:145` | **M16 equivalent** — hook invoked only for the **last** model | ✅ Killed (5 failures) | same set + `test_hook_error_fails_only_that_model` |
+| **M28b** | `cli.py:355` | **M16 equivalent at the CLI layer** — `ensure_only(models[0].name, …)` regardless of the argument | ✅ Killed | `test_hook_makes_each_model_the_sole_resident_and_reports_its_args` |
+| M28a | `cli.py:349` | closure resolves the **state/params of `models[0]`** instead of the model it was handed | ❌ **SURVIVED** — 370 passed | — |
+| M29 | `runner.py:185-186` | hook result never recorded into `_prepared_params` | ✅ Killed (4) | 4 × `test_runner_prepare_hook.py` |
+| M30 | `runner.py:153` | merged `load_params` never written back to `result.config` | ✅ Killed (4) | 4 × `test_runner_prepare_hook.py` |
+| M30b | `runner.py:151` | merge discards the `RunConfig.load_params` base | ✅ Killed | `test_base_config_load_params_are_merged_with_hook_results` |
+| M31 | `runner.py:182-190` | `phase="prepare"` block moved **after** warmup | ❌ **SURVIVED** — 370 passed | — |
+| M32 | `runner.py:184` | hook's `ProviderError` re-raised as `RuntimeError` (escapes per-model isolation) | ✅ Killed | `test_hook_error_fails_only_that_model` |
+| M33 | `runner.py:204` | `report.warnings.append(...)` removed (Fix 6) | ✅ Killed (3) | `test_unload_failure_is_recorded_on_the_report_warnings`, `test_warnings_survive_json_round_trip`, `test_plainui_prints_the_warning_after_the_leaderboard` |
+| M34 | `runner.py:201-202` | `last_unload_error` read **before** the unload call (Fix 6) | ✅ Killed (3) | `test_unload_failure_is_recorded_...`, `test_unload_failure_emits_a_warning_phase_event`, `test_warnings_survive_json_round_trip` |
+| M35 | `runner.py:208` | mid-run `ProviderError` swallowed, `report.error` left unset (Fix 4 target) | ✅ Killed (2) | `test_the_broken_model_is_flagged_and_the_others_still_measure`, `test_hook_error_fails_only_that_model` |
+| M36 | `cli.py:335-336` | `our_names` exemption dropped — confirmation demanded for run-member residents | ✅ Killed | `test_no_confirmation_when_nothing_foreign_is_resident` |
+| M37 | `cli.py:335-336` | `foreign = []` — a foreign resident is never detected, confirmation never asked | ✅ Killed (2) | `test_refusal_of_a_foreign_resident_unloads_nothing_and_stops_the_run`, `test_cmd_run_returns_nonzero_and_never_benchmarks_on_refusal` |
+| M38 | `cli.py:340` | refusal of a foreign resident ignored, run proceeds | ✅ Killed (2) | same two |
+| M39 | `cli.py:351` | server-resolved preset echoed back as `extra_args` | ✅ Killed (3) | `test_server_resolved_preset_is_not_echoed_back_as_extra_args` +2 |
+| M40 | `plainui.py:130-132` | warnings not printed after the leaderboard | ✅ Killed | `test_plainui_prints_the_warning_after_the_leaderboard` |
+| M41 | `models.py:148` | `warnings` emptied on serialisation | ✅ Killed | `test_warnings_survive_json_round_trip` |
+
+**Result**: **16/18 killed, 2 survived** — ❌ FAIL.
+**M16 status: KILLED** — all three of its equivalents (M27, M27b, M28b) fail the suite. The
+iteration-1 blocker is empirically closed.
+
+**Isolation verified**: `git worktree remove --force` + `git worktree prune` run;
+`git worktree list` shows only `/home/eskudo/homebench`; `git status --porcelain` is empty,
+identical to the pre-sensor baseline.
+
+### Surviving mutant analysis
+
+**M28a — the params half of the per-model closure is still single-model-tested.**
+`src/homebench/cli.py:349` resolves `state` for the model it is handed; pointing it at
+`models[0]` instead changes nothing that any test observes. Consequence in production: with a
+`$HOMEBENCH_HOME/load-params.json` carrying different `-ngl` per model
+(`src/homebench/lifecycle/params.py:101` keys overrides by `model.id`), every model after the
+first would be **loaded with model 1's flags** while the recorded `effective_args` — read back
+from the router at `manager.py:136-139` — would still look correct. That is a silent measurement
+error of exactly the class MLC-09/MLC-13 exist to prevent. `test_json_override_is_sent_as_extra_args`
+(`tests/test_cli_lifecycle.py:202-213`) and `test_server_resolved_preset_is_not_echoed_back_as_extra_args`
+(`:189-199`) both drive the hook with a **single** model, so neither discriminates. This is
+lesson **L-001 recurring inside the very fix that was meant to close it**.
+
+**M31 — nothing asserts that preparation precedes warmup.**
+Moving the whole `phase="prepare"` block below the `cfg.warmup` block leaves the suite green.
+`tests/test_runner_prepare_hook.py:19` builds every runner with `warmup=False`, so the two steps
+are never both live in one test. Consequence in production: `provider.warmup()` would fire against
+a model the router has not loaded yet — and the deployment reports `models_autoload: false`
+(AD-001) — so warmup would hit an unloaded model on every cold model. tasks.md F1 explicitly
+lists "chamado 1×/modelo **antes do warmup**" as a Done-when criterion, and spec MLC-01/MLC-03 say
+the guarantee holds "**antes de medir**"; neither is asserted.
+
+---
+
+## Spec-Anchored Re-check of the Affected ACs
+
+| Criterion | Spec-defined outcome | `file:line` + assertion | Result |
+| --- | --- | --- | --- |
+| **MLC-01** — estado reportado por modelo, garantia aplicada antes de medir | the guarantee is established for **every** measured model, not just one | `tests/test_runner_prepare_hook.py:28` `assert calls == ["fast:1b", "smart:8b"]`; `:85` `assert prepared == ["fast:1b", "smart:8b"]`; `tests/test_cli_lifecycle.py:182` `assert loaded == ["m1", "m2", "m3"]` | ✅ **PASS** (was ⚠️ in iteration 1) ⚠️ ordering vs warmup unasserted (M31) |
+| **MLC-03** — descarregar **todos** os outros residentes antes de medir | after each model's turn only that model is resident | `tests/test_cli_lifecycle.py:183` `assert "resident" in [c[1] for c in client.calls if c[0] == "unload"]`; `:185` `assert [s.id for s in client._states if s.status == "loaded"] == ["m3"]` (3-model run, sole resident at the end) | ✅ **PASS** (was ⚠️ in iteration 1) |
+| **MLC-06** — carga que falha/expira ⇒ `ProviderError`, nada parcialmente carregado | error propagated; no half-loaded model; no spurious unload | `tests/test_lifecycle_manager.py:287` `assert [s.id for s in router._states if s.status == "loaded"] == []`; `:289` `assert [c[1] for c in router.calls if c[0] == "unload"] == ["other"]`; timeout path `:275`/`:287` (iteration 1) | ✅ **PASS** — the iteration-1 note "failed-`load` POST path untested" is now closed |
+| **MLC-09** — parâmetros efetivos gravados por modelo no resultado salvo | one entry **per measured model**, JSON round-trippable, merged with any config base | `tests/test_runner_prepare_hook.py:36` `assert result.config["load_params"] == {"fast:1b": ["-ngl","10"], "smart:8b": ["-ngl","20"]}`; `:44` hook returning None records nothing; `:56-58` merge with `RunConfig.load_params`; `:103` `assert restored["config"]["load_params"]["smart:8b"] == ["-ngl","42"]` | ✅ **PASS** (was ⚠️ in iteration 1) ⚠️ the *values* are only single-model-tested (M28a) |
+| **MLC-11** — reinício do router no meio da medição falha só o modelo corrente | `reports[i].error` set for the broken model; the others still produce metrics; run completes | `tests/test_runner_error_isolation.py:45` `assert "connection refused: router restarting" in by_name["b:1b"].error`; `:48-51` `assert by_name["a:1b"].error is None` + `assert by_name["a:1b"].speed.tokens_per_sec > 0` (same for `c:1b`); `:58` `assert errored == ["c:1b"]`; `:63-64` `assert [...] == ["run_start", "run_done"]`. Hook-raised errors: `tests/test_runner_prepare_hook.py:71-74` | ✅ **PASS** (was ❌ in iteration 1) |
+| **MLC-14 AC2** — falha de unload registrada sem interromper o run | the failure reaches the user and the saved run; the run does not fail | `tests/test_runner_unload_warning.py:47` `assert by_name["fast:1b"].warnings == ["unload failed: router said no for fast:1b"]`; `:48` `assert by_name["fast:1b"].error is None`; `:49` clean model has `warnings == []`; `:57` `phase="warning"` event; `:75` survives the JSON round trip; `:81` old saved runs load with `warnings == []`; `:90` `assert "warning" in out and "router said no for fast:1b" in out` | ✅ **PASS** — the iteration-1 spec-precision gap ("written and read by nothing") is closed |
+| **MLC-08 AC1** — *regression check* — descarregar um residente exige exibir + confirmar | confirmation before **any** resident is unloaded | confirmation is now asked **only for residents that are not part of this run** (`src/homebench/cli.py:330-343`); the per-model closure passes `lambda _plan: True` (`:355`). Asserted as intended behaviour at `tests/test_cli_lifecycle.py:140-149` (`input` monkeypatched to `pytest.fail`) | ⚠️ **NARROWED, undocumented** — see Gap 3 |
+
+**Status**: 6 of 6 re-checked ACs now match their spec-defined outcome ·
+1 previously-passing AC (MLC-08 AC1) narrowed without a recorded decision ·
+2 discrimination gaps (M28a, M31) sit on MLC-01/03 (ordering) and MLC-09/MLC-13 (per-model values).
+
+---
+
+## Assessment of the AD-006 Deferrals
+
+Each item judged on whether the stated reason is sound or a real requirement being swept aside.
+
+| Deferred item | Stated reason | Assessment |
+| --- | --- | --- |
+| **MLC-15** — comparar Vulkan vs ROCm (P3) | os dois hosts rodam builds diferentes (`b10615` vs `b10664`), a comparação mistura backend com versão | ✅ **Legitimate.** P3, never MVP, user-chosen, and now recorded as `Deferred (AD-006)` in `spec.md:255` + the status table at `:272`. ⚠️ Minor: the stated reason is about *interpretive validity*, not feasibility — the AC ("medir nos dois e apresentar lado a lado") is still implementable, and AD-004 already requires per-host `build_info`. The honest reason is "P3, out of MVP". Not a disguised failure either way. L-002 (a skipped test is zero evidence) is now respected: `tests/test_live_router.py` no longer backs any active requirement. |
+| **Aviso de "requisição em voo"** antes de descarregar | build `b10615` não expõe contagem de requisições ativas em `/props`, `/v1/models` nem `/models/sse`; a confirmação obrigatória já cobre o risco de fundo | ⚠️ **Legitimate but its own mitigation was weakened in the same iteration.** The dependency limit is real (a warning cannot be built from data the router does not publish; `/slots` is a non-router endpoint), and the edge case is now annotated in `spec.md:231-233`. **But** the fallback argument — "a confirmação obrigatória (AD-002) já cobre o risco" — no longer holds as stated: Fix 1 removed the confirmation for run-member residents and for any model that becomes resident **after** the up-front check (`src/homebench/cli.py:355` `lambda _plan: True`). The deferral note should be amended, or Gap 3 fixed. |
+| **`--models-max` atingido durante a carga ⇒ liberar o mais antigo e repetir** | `plan()` já descarrega todos os outros antes de carregar, o limite nunca é atingido | ✅ **Legitimate — moot by construction.** Verified in code: `src/homebench/lifecycle/manager.py:67` collects every other resident and `:117-118` unloads them all before `:121` issues the load, so the tool's own path never presents more than one instance to a `max_instances: 2` router. Residual risk is a third party loading a model between the unload loop and the load POST — a race outside the tool's control, not the deferred requirement. |
+| **Heurística de `-ngl` no caminho de produção** (MLC-13 P2 AC5) | o router sempre preenche `status.args`, então `resolve()` sempre cai em `preset` | ⚠️ **Legitimate outcome, inaccurate reason.** The tier is unreachable for a stronger reason than the one recorded: `src/homebench/cli.py:350` calls `resolve(state, overrides=overrides)` and never passes `hardware=` / `file_bytes=`, so `src/homebench/lifecycle/params.py:108` (`if hardware is not None and file_bytes > 0`) can never be true **regardless** of whether a preset exists. The deferral stands (P2 AC5, user-chosen, annotated at `spec.md:270`), but `suggest_ngl` + the heuristic branch remain in `src/` reachable only from tests — lesson L-006 unaddressed. Recommend either wiring it or deleting it rather than leaving dead code. |
+| **Mesmo modelo nos dois backends sem deduplicar** | N/A por construção: um client por host, um provider por run | ✅ **Legitimate.** Verified: `src/homebench/providers/llamacpp.py:41-47` probes and builds one `LlamaRouterClient` per provider instance (per host, never cached globally — AD-004, mutation M25 killed in iteration 1), and `_prepare_router_models` closes over that single `client`. With one provider per run there is no shared list in which two ids could collide. Correctly annotated as N/A in `spec.md:227-229`. |
+
+**Verdict on the deferrals**: none is a disguised failure. Two carry reasons that are inaccurate
+or now stale (in-flight warning, `-ngl` heuristic) and should be amended in AD-006.
+
+---
+
+## Regression Check
+
+- **Gate**: `.venv/bin/python -m pytest -q` → **370 passed, 5 skipped, 0 failed** ·
+  `.venv/bin/python -m build` → `homebench-0.11.0.tar.gz` + `…-py3-none-any.whl`, exit 0.
+- **Test count**: pre-feature 162 → iteration 1: 349 → iteration 2: **370** (+21). Added:
+  `tests/test_runner_prepare_hook.py` (8), `tests/test_runner_unload_warning.py` (7),
+  `tests/test_runner_error_isolation.py` (3), `tests/test_lifecycle_manager.py` (+1),
+  `tests/test_cli_lifecycle.py` 16 → 18 collected.
+- **No coverage lost in the rewritten `tests/test_cli_lifecycle.py`**: every iteration-1 MLC-08
+  assertion survives — force-unload flag (`:64-77`), names shown before the question (`:83-98`),
+  answer parametrisation (`:101-109`), non-interactive refusal naming `--force-unload` (`:112-119`),
+  refusal unloads nothing (`:152-164`), `cmd_run` returns 1 and builds no runner (`:219-231`).
+  The single removed test (`test_approval_unloads_the_others_and_returns_effective_args`) was
+  replaced by the strictly stronger multi-model `test_hook_makes_each_model_the_sole_resident_and_reports_its_args`.
+- **Iteration-1 CONFIRMED-good areas untouched**: the fix diff (`8ea26da..HEAD`) modifies only
+  `src/{cli,models,plainui,runner}.py` and `tests/{test_cli_lifecycle,test_lifecycle_manager}.py`.
+  `tests/test_lifecycle_router.py`, `test_lifecycle_models.py`, `test_lifecycle_params.py`,
+  `test_lifecycle_boundary.py`, `test_llamacpp_router.py`, `test_doctor_router.py`,
+  `test_cli_models_command.py`, `test_runner_load_params.py` are byte-identical to iteration 1 —
+  the router client, planner/executor, headless boundary, `models` subcommand, doctor checks and
+  both anti-drift guards (`to_dict` allowlist, `_COMMANDS` parity) keep their assertions intact.
+  Re-run mutations M37/M38/M39 confirm the confirmation path and the preset-echo guard still
+  discriminate after the rewrite.
+- **No assertion weakened, no test deleted without a stronger replacement.**
+- **Success Criterion 5** (no container/process control) re-checked: no `subprocess`, `docker`,
+  `systemctl` anywhere in `src/homebench/`. The API key is still never interpolated into a message.
+
+---
+
+## Code Quality — iteration 2 delta
+
+| Principle | Status |
+| --- | --- |
+| Minimum code | ✅ the hook is ~10 lines in `runner.py`; no new module, no new abstraction |
+| Surgical changes | ✅ 4 product files, all previously in scope |
+| No scope creep | ✅ deferred items genuinely left out; `ModelReport.warnings` is the smallest thing that satisfies MLC-14 AC2 |
+| Matches patterns | ✅ `Optional[Callable]` injection mirrors the existing `judge=`; `warnings` follows the `to_dict`/`from_dict` + tolerant-`from_dict` convention |
+| Spec-anchored outcome check | ⚠️ MLC-08 AC1 narrowed without a recorded decision (Gap 3) |
+| Per-layer Coverage Expectation | ⚠️ the CLI/integration layer now covers the multi-model happy path but not multi-model **parameter resolution** (M28a) or step ordering (M31) |
+| Every test maps to a spec requirement | ✅ all three new test files name their MLC ids in the module docstring |
+| Documented guidelines followed | ✅ none exist; strong defaults applied |
+
+---
+
+## Ranked Gaps — iteration 2
+
+### Gap 1 (Major) — M28a: the closure's parameter resolution is only single-model-tested
+
+- **Where**: `src/homebench/cli.py:349`; tests `tests/test_cli_lifecycle.py:189-213`.
+- **Why it matters**: a wrong-model params lookup would silently load models 2..N with model 1's
+  `-ngl`/context flags while the recorded `effective_args` still read correct — an undetectable
+  measurement error, the same class MLC-09 exists to prevent.
+- **Fix**: extend `test_hook_makes_each_model_the_sole_resident_and_reports_its_args` (or add one
+  test) to drive ≥2 models with **distinct** `load-params.json` overrides and assert the `load`
+  call for each model carries **its own** `extra_args`. Mutation M28a must then be killed.
+
+### Gap 2 (Major) — M31: nothing asserts preparation runs before warmup
+
+- **Where**: `src/homebench/runner.py:182-190`; tests `tests/test_runner_prepare_hook.py:19`
+  disables warmup everywhere.
+- **Why it matters**: with `models_autoload: false` (AD-001), warming up before the prepare hook
+  loads the model would hit an unloaded model on every cold model. It is a written Done-when
+  criterion (tasks.md F1) and the "antes de medir" half of MLC-01/MLC-03.
+- **Fix**: one test with `warmup=True` and a provider that records call order, asserting
+  `["prepare:m", "warmup:m", ...]` per model. Mutation M31 must then be killed.
+
+### Gap 3 (Major) — Fix 1 narrowed MLC-08 AC1 without recording the decision
+
+- **Where**: `src/homebench/cli.py:330-343` (confirmation covers only residents **not** in the
+  run) and `:355` (`lambda _plan: True` for every per-model plan thereafter).
+- **Why it matters**: MLC-08 AC1 is unconditional ("WHEN o módulo precisa descarregar um modelo
+  residente THEN … pedir confirmação antes de agir") and AD-002 exists to protect a third party's
+  Open WebUI session. Two paths now unload a resident with no prompt: (a) a resident that happens
+  to be one of the run's models — and the default run auto-selects the 3 smallest of 17, so the
+  user may never have named it; (b) any model loaded by someone else **after** the up-front check,
+  since the per-model confirmer is hard-wired to `True` for the rest of the run. Under iteration-1
+  code both were confirmed. The narrowing is explained in a code comment
+  (`src/homebench/cli.py:331-334`) but appears in no AD, and AD-006's in-flight-warning deferral
+  still cites this confirmation as its mitigation.
+- **Fix**: either (i) record it as a decision (AD-007) and amend MLC-08 AC1 + the AD-006
+  in-flight note to match, or (ii) re-check for newly-foreign residents inside `prepare` and ask
+  then. Whichever is chosen, add a test for a resident that **is** part of the run.
+
+### Gap 4 (Minor, carried) — `-ngl` heuristic tier remains dead code in `src/`
+
+- `src/homebench/lifecycle/params.py:62-79,108-111` are reachable only from tests
+  (`src/homebench/cli.py:350` never passes `hardware=`/`file_bytes=`). Deferred by AD-006, but the
+  recorded reason is inaccurate (see the deferral table). Wire it or delete it.
+
+---
+
+## Requirement Traceability Update — iteration 2
+
+| Requirement | Iteration 1 | Iteration 2 |
+| --- | --- | --- |
+| MLC-01 | ⚠️ unit-level only | ✅ **Verified** (multi-model; ⚠️ ordering unasserted — Gap 2) |
+| MLC-03 | ⚠️ unit-level only | ✅ **Verified** (multi-model) |
+| MLC-06 | ✅ (failed-`load` path untested) | ✅ **Verified** (both paths) |
+| MLC-08 | ✅ Verified | ⚠️ **Narrowed** — AC1 no longer unconditional (Gap 3) |
+| MLC-09 | ⚠️ `models[0]` only | ✅ **Verified** (per model; ⚠️ values single-model-tested — Gap 1) |
+| MLC-11 | ❌ Needs test | ✅ **Verified** |
+| MLC-13 | ⚠️ heuristic unreachable | ⚠️ unchanged — deferred (AD-006), Gap 4 |
+| MLC-14 | ✅ (⚠️ inspection-only) | ✅ **Verified** — surfaces on `ModelReport.warnings`, in the saved run, and after the leaderboard |
+| MLC-15 | ❌ Not implemented | ⏸️ **Deferred (AD-006)** — legitimate |
+| MLC-02, 04, 05, 07, 10, 12 | ✅ Verified | ✅ unchanged (test files byte-identical) |
+
+---
+
+## Summary — iteration 2
+
+**Overall**: ❌ Not Ready — but the blocker is closed and the remaining work is three assertions
+plus one recorded decision.
+
+**Spec-anchored check**: 6/6 re-checked ACs now match their spec-defined outcome
+(MLC-01, 03, 06, 09, 11, 14) · 1 previously-passing AC narrowed (MLC-08 AC1) · 5/5 AD-006
+deferrals judged legitimate (2 with reasons that need amending).
+**Sensor**: 18 mutations, **16 killed, 2 survived** (M28a, M31). **M16 is KILLED** — proven by
+three independent equivalents (M27, M27b, M28b).
+**Gate**: 370 passed, 0 failed, 5 skipped (justified, unchanged), `build` clean.
+
+**What now works that did not before**: the "only the target is resident" guarantee and the
+per-model `load_params` record hold for **every** measured model, not just the first; a mid-run
+`ProviderError` is proven to fail only the current model; a best-effort unload failure now reaches
+the user and the saved run.
+
+**Issues found**: Gaps 1–3 above (two weak-test gaps inside the fix surface, one undocumented AC
+narrowing) + carried Gap 4.
+
+**Next steps**: route Gaps 1–3 to an implementer and re-verify (iteration 3 of max 3). Gaps 1 and
+2 are single tests each; Gap 3 is a decision plus either a doc amendment or a small code change.

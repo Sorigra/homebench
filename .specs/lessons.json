@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 7,
+  "next_id": 9,
   "lessons": [
     {
       "id": "L-001",
@@ -18,10 +18,11 @@
       "recurrence": 1,
       "harmful": 0,
       "evidence": [
-        "validation.md sensor M16 (src/homebench/cli.py:326) (cli)"
+        "validation.md sensor M16 (src/homebench/cli.py:326) (cli)",
+        "validation.md iteration-2 sensor M28a (src/homebench/cli.py:349) (cli)"
       ],
       "created": "2026-08-28T05:53:27Z",
-      "last_seen": "2026-08-28T05:53:27Z"
+      "last_seen": "2026-08-28T08:44:17Z"
     },
     {
       "id": "L-002",
@@ -112,6 +113,42 @@
       ],
       "created": "2026-08-28T05:53:27Z",
       "last_seen": "2026-08-28T05:53:27Z"
+    },
+    {
+      "id": "L-007",
+      "key": "surviving_mutant::assert the order of pipeline steps not only that each step ran a test that disables a neighbouring step cannot detect a reordering",
+      "text": "Assert the order of pipeline steps, not only that each step ran; a test that disables a neighbouring step cannot detect a reordering.",
+      "signal": "surviving_mutant",
+      "scope": "runner",
+      "status": "candidate",
+      "features": [
+        "model-lifecycle"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation.md iteration-2 sensor M31 (src/homebench/runner.py:182-190) (runner)"
+      ],
+      "created": "2026-08-28T08:44:17Z",
+      "last_seen": "2026-08-28T08:44:17Z"
+    },
+    {
+      "id": "L-008",
+      "key": "ac_gap::when a fix narrows an existing acceptance criterion record it as a decision and amend the criterion a code comment is not a decision",
+      "text": "When a fix narrows an existing acceptance criterion, record it as a decision and amend the criterion; a code comment is not a decision.",
+      "signal": "ac_gap",
+      "scope": "specs",
+      "status": "candidate",
+      "features": [
+        "model-lifecycle"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "MLC-08 AC1 - src/homebench/cli.py:330-343,355 (Gap 3) (specs)"
+      ],
+      "created": "2026-08-28T08:44:17Z",
+      "last_seen": "2026-08-28T08:44:17Z"
     }
   ]
 }
