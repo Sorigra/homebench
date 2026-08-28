@@ -129,7 +129,7 @@ T17
 
 ---
 
-### T3: `parse_depths()`
+### T3: `parse_depths()` ✅ Complete
 
 **What**: criar o módulo `metrics/depth.py` com só a função de parsing da spec `--depths`.
 **Where**: `src/homebench/metrics/depth.py`
@@ -140,12 +140,12 @@ T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `"0,8192,32768"` → `[0, 8192, 32768]`, **preservando a ordem dada** (diferente de `parse_levels`, que ordena)
-- [ ] Não deduplica (edge case da spec)
-- [ ] `""` e `","` → `[0]`
-- [ ] Valor não inteiro ou negativo levanta `ValueError` citando o valor
-- [ ] Gate check passes: `.venv/bin/python -m pytest -q tests/test_depth_prompt.py`
-- [ ] Test count: 385 + 6 = 391 testes passam
+- [x] `"0,8192,32768"` → `[0, 8192, 32768]`, **preservando a ordem dada** (diferente de `parse_levels`, que ordena)
+- [x] Não deduplica (edge case da spec)
+- [x] `""` e `","` → `[0]`
+- [x] Valor não inteiro ou negativo levanta `ValueError` citando o valor
+- [x] Gate check passes: `.venv/bin/python -m pytest -q tests/test_depth_prompt.py`
+- [x] Test count: 385 + 6 = 391 testes passam
 
 **Tests**: unit
 **Gate**: quick
