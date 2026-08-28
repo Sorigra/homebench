@@ -154,53 +154,59 @@ descarga individual.
 
 ## Handoff
 
-**Onde parou:** Specify, Design e Tasks **concluídos e aprovados pelo usuário** em 2026-08-28.
-Ambos os gates determinísticos passaram: `validate_spec.py` → 0 erros ·
-`validate_tasks.py` → 0 erros. **Próxima fase: Execute (T1).**
+**Onde parou:** feature `model-lifecycle` **implementada e verificada** em 2026-08-28.
+Execute concluído (T1–T17) + 3 iterações de correção pós-verificação. `validate_state.py
+model-lifecycle` → 0 erros. `validation.md` → veredito **PASS** (§ Iteration 3).
 
-**Nada implementado ainda.** Nenhum arquivo em `src/` foi tocado. `git status` limpo exceto
-os artefatos de planejamento não commitados.
+**Estado do git:** branch `feat/model-lifecycle`, ~13 commits à frente da `main`, **nada
+enviado ao remoto**. Árvore limpa. `git push` continua exigindo autorização explícita.
 
-### Precondição de ambiente (satisfeita)
+**Testes:** 162 (antes) → **373 passam, 5 pulados** (`tests/test_live_router.py`, só roda com
+`HOMEBENCH_LIVE=1`, nunca no CI). Python local 3.14; CI cobre 3.9–3.12.
 
-`.venv/` criado e `pip install -e ".[dev]"` feito. **162 testes passam** em Python 3.14.4
-(`.venv/bin/python -m pytest -q`). Esse é o número anti-regressão. `.venv/` está no `.gitignore`.
-Atenção: o Python local é 3.14, mais novo que a matriz do CI (3.9–3.12).
+### O que foi entregue
 
-### Plano de execução aprovado
+Pacote `src/homebench/lifecycle/` (headless, AD-005): `models.py`, `router.py`
+(`LlamaRouterClient`), `params.py`, `manager.py` (`ModelLifecycleManager`). Integração:
+`providers/llamacpp.py` (`unload()` real + `router()` por host), `runner.py` (hook
+`prepare_model` por modelo + `ModelReport.warnings`), `cli.py` (fluxo de confirmação,
+subcomando `models`, `--force-unload`), `doctor.py` (checagens do router).
 
-| Batch | Fases | Tarefas | Modelo |
-| --- | --- | --- | --- |
-| 1 | Phase 1 + 2 | T1–T8 (8) | **Sonnet** — mecânico, contrato já verificado |
-| 2 | Phase 3 + 4 + 5 | T9–T17 (9) | **Opus** — domínio + integração com armadilhas |
-| Verifier | — | — | **Opus** — nunca o tier mais barato |
+### Decisões desta fase
 
-Sequenciais: nunca mais de um subagente vivo. Total 3, conforme limite pedido pelo usuário.
+AD-006 (itens adiados: MLC-15, aviso de requisição em voo, retry `--models-max`, heurística
+`-ngl` em produção, dedup cross-backend) · AD-007 (escopo da confirmação após o hook por modelo).
 
-**Suposições da spec, decididas no design:** timeout de carga = 300 s (TD-06) ·
-override JSON em `$HOMEBENCH_HOME/load-params.json` (TD-07) · `extra_args` não validado no
-cliente (TD-05).
+### Teste ao vivo — NÃO executado
+
+`tests/test_live_router.py` foi escrito mas nunca rodado contra `:8080`/`:8081`. Roda o ciclo
+completo (load → geração → unload → restaura estado) e **falha de propósito se os builds dos
+dois hosts divergirem** (hoje `b10615` vs `b10664`). Rodar exige `HOMEBENCH_LIVE=1` e é uma
+ação que toca serviço de produção — confirmar com o usuário antes.
+
+### Próximos passos possíveis
+
+1. Rodar o teste ao vivo opt-in (com confirmação do usuário).
+2. Abrir PR de `feat/model-lifecycle` (exige autorização de `git push`).
+3. Próximas features do fork: painel GPU AMD, perfis de teste, fluxo guiado na TUI — todas
+   consomem `lifecycle/` sem modificá-lo.
 
 ### Autorizações e proibições permanentes
 
-- **Autorizado:** teste de fumaça ao vivo contra `:8080` e `:8081`, com os modelos em
-  `/home/ai-models`. A chave fica em `~/llm-server/llama/api-key.txt` — **nunca logar nem commitar**.
-- **Proibido:** iniciar, parar ou reiniciar qualquer container. Servem Open WebUI e Traefik em
-  produção (AD-001).
-- **Proibido sem autorização explícita:** `git push` e qualquer operação remota. Aprovar tasks
-  autoriza apenas implementação e commits **locais**.
+- **Autorizado:** teste ao vivo contra `:8080`/`:8081`, modelos em `/home/ai-models`. Chave em
+  `~/llm-server/llama/api-key.txt` — **nunca logar nem commitar**.
+- **Proibido:** iniciar, parar ou reiniciar qualquer container (AD-001).
+- **Proibido sem autorização explícita na hora:** `git push` e qualquer operação remota.
 
-**Dívidas pré-existentes encontradas durante o design** (não são desta feature, mas foram
-registradas em `design.md § Risks & Concerns`): ordenação "3 menores" é no-op no llamacpp porque
-`size_bytes` é sempre 0 (`cli.py:221`) · subcontagem de tokens com `reasoning_content`
-(`openai_compat.py:130`, diferido como MLC-16) · `_measure_speed` não captura `ProviderError`
-(`runner.py:187`).
+### Dívidas pré-existentes (não desta feature, em `design.md § Risks & Concerns`)
 
-**Nada implementado ainda.** Nenhum arquivo em `src/` foi tocado.
+Ordenação "3 menores" no-op no llamacpp (`size_bytes` sempre 0) · subcontagem de tokens com
+`reasoning_content` (`openai_compat.py`, diferido como MLC-16) · `_measure_speed` não captura
+`ProviderError` (comportamento hoje é o desejado para MLC-11, mas o nome sugere bug).
 
-**Artefatos relacionados:**
-- `docs/plano-modulo-ciclo-de-vida.md` — plano e achados de ambiente
-- `contexto-llm-benchmark.md` — documento de produto original (premissa corrigida por AD-001)
-- `CLAUDE.md` — seção "This fork's direction"
+### Plano de execução usado (histórico)
 
-**Próximo passo:** Execute — despachar o Batch 1 (T1–T8) em Sonnet.
+Batch 1 (T1–T8, Sonnet) → Batch 2 (T9–T17, Opus) → Verifier iter 1 (Opus, FAIL) → correções
+Fix 1/4/6 (inline) → Verifier iter 2 (Opus, FAIL: 2 sobreviventes + narrowing) → correções
+G1/G2/G3 (inline) → Verifier iter 3 (inline, PASS). 4 subagentes no total (o 4º foi exceção
+autorizada pelo usuário para re-verificação).

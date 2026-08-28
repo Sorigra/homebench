@@ -242,19 +242,19 @@ build do router não expõe requisições ativas) e o retry ao atingir `--models
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| MLC-01 | P1: Medição limpa | Design | Pending |
-| MLC-02 | P1: Medição limpa | Design | Pending |
-| MLC-03 | P1: Medição limpa | Design | Pending |
-| MLC-04 | P1: Medição limpa | Design | Pending |
-| MLC-05 | P1: Medição limpa | Design | Pending |
-| MLC-06 | P1: Medição limpa | Design | Pending |
-| MLC-07 | P1: Medição limpa | Design | Pending |
-| MLC-08 | P1: Confirmação | Design | Pending |
-| MLC-09 | P2: Parâmetros | Design | Pending |
-| MLC-10 | P2: Inspeção | Design | Pending |
-| MLC-11 | Edge: router reinicia | Design | Pending |
-| MLC-12 | P2: Inspeção | Design | Pending |
-| MLC-13 | P2: Parâmetros | Design | Pending |
+| MLC-01 | P1: Medição limpa | Execute | ✅ Verificado |
+| MLC-02 | P1: Medição limpa | Execute | ✅ Verificado |
+| MLC-03 | P1: Medição limpa | Execute | ✅ Verificado |
+| MLC-04 | P1: Medição limpa | Execute | ✅ Verificado |
+| MLC-05 | P1: Medição limpa | Execute | ✅ Verificado |
+| MLC-06 | P1: Medição limpa | Execute | ✅ Verificado |
+| MLC-07 | P1: Medição limpa | Execute | ✅ Verificado |
+| MLC-08 | P1: Confirmação | Execute | ✅ Verificado |
+| MLC-09 | P2: Parâmetros | Execute | ✅ Verificado |
+| MLC-10 | P2: Inspeção | Execute | ✅ Verificado |
+| MLC-11 | Edge: router reinicia | Execute | ✅ Verificado |
+| MLC-12 | P2: Inspeção | Execute | ✅ Verificado |
+| MLC-13 | P2: Parâmetros | Execute | ✅ Verificado |
 | MLC-14 | P1: `unload()` real | Execute | ✅ Verificado |
 | MLC-15 | P3: Comparar backends | - | Deferred (AD-006) |
 | MLC-16 | Fora de escopo: `reasoning_content` | - | Deferred |
