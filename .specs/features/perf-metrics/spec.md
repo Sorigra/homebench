@@ -156,10 +156,10 @@ já salvos em `~/.homebench/runs/`.
 
 | Requirement ID | Story | Phase | Status |
 | -------------- | ----- | ----- | ------ |
-| PERF-01 | P1: tok/s de raciocínio | Design | Pending |
-| PERF-02 | P1: tok/s de raciocínio | Design | Pending |
+| PERF-01 | P1: tok/s de raciocínio | T4 | Pending |
+| PERF-02 | P1: tok/s de raciocínio | T4 | Pending |
 | PERF-03 | P1: tok/s de raciocínio | T1, T4 | Pending |
-| PERF-04 | P1: tok/s de raciocínio | Design | Pending |
+| PERF-04 | P1: tok/s de raciocínio | T4 | Pending |
 | PERF-05 | P1: tok/s de raciocínio | Design | Pending |
 | PERF-06 | P2: prefill vs decode | Design | Pending |
 | PERF-07 | P2: prefill vs decode | Design | Pending |

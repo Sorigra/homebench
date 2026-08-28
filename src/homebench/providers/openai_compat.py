@@ -101,7 +101,8 @@ class OpenAICompatibleProvider(Provider):
 
         speed = SpeedMetrics()
         chunks: List[str] = []
-        delta_count = 0
+        content_deltas = 0
+        reasoning_deltas = 0
         start = time.perf_counter()
         first_token_at: Optional[float] = None
         usage = None
@@ -125,24 +126,35 @@ class OpenAICompatibleProvider(Provider):
                     if obj.get("usage"):
                         usage = obj["usage"]
                     for choice in obj.get("choices", []):
-                        piece = (choice.get("delta") or {}).get("content") or ""
+                        delta = choice.get("delta") or {}
+                        piece = delta.get("content") or ""
+                        # reasoning models stream their tokens here and send
+                        # content: null -- they cost the same compute, so they
+                        # count as generated tokens (PERF-01)
+                        thought = delta.get("reasoning_content") or ""
+                        if (piece or thought) and first_token_at is None:
+                            first_token_at = time.perf_counter()
                         if piece:
-                            if first_token_at is None:
-                                first_token_at = time.perf_counter()
                             chunks.append(piece)
-                            delta_count += 1
+                            content_deltas += 1
                             if on_token is not None:
                                 on_token(piece)
+                        if thought:
+                            reasoning_deltas += 1
         except httpx.HTTPError as exc:
             raise ProviderError(f"{self.name} generate failed for {model!r}: {exc}")
 
         end = time.perf_counter()
         speed.total_s = end - start
+        # usage doesn't split the two kinds, so the split is delta-counted
+        # (best-effort: ~1 token per delta), same as the no-usage fallback
+        speed.content_tokens = content_deltas
+        speed.reasoning_tokens = reasoning_deltas
         if usage:
             speed.prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
             speed.output_tokens = int(usage.get("completion_tokens", 0) or 0)
         else:
-            speed.output_tokens = delta_count  # best-effort: ~1 token per delta
+            speed.output_tokens = content_deltas + reasoning_deltas
         if first_token_at is not None:
             speed.ttft_s = first_token_at - start
             speed.eval_s = max(0.0, end - first_token_at)

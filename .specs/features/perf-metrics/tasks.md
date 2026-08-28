@@ -153,7 +153,7 @@ T17
 
 ---
 
-### T4: Contar `reasoning_content` no stream
+### T4: Contar `reasoning_content` no stream ✅ Complete
 
 **What**: no parser de SSE, acumular `delta.reasoning_content` separado de `delta.content`, disparar o TTFT no primeiro token de qualquer um dos dois e preencher as contagens.
 **Where**: `src/homebench/providers/openai_compat.py`
@@ -164,12 +164,12 @@ T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Stream 100% `reasoning_content` produz `tokens_per_sec > 0` e `ttft_s > 0`
-- [ ] `GenerationResult.text` contém **apenas** `content` (PERF-04)
-- [ ] `content_tokens` e `reasoning_tokens` refletem os deltas de cada tipo
-- [ ] Stream misto (`content` + `reasoning_content`) conta os dois no tempo de decode
-- [ ] Gate check passes: `.venv/bin/python -m pytest -q tests/test_providers.py`
-- [ ] Test count: 391 + 5 = 396 testes passam
+- [x] Stream 100% `reasoning_content` produz `tokens_per_sec > 0` e `ttft_s > 0`
+- [x] `GenerationResult.text` contém **apenas** `content` (PERF-04)
+- [x] `content_tokens` e `reasoning_tokens` refletem os deltas de cada tipo
+- [x] Stream misto (`content` + `reasoning_content`) conta os dois no tempo de decode
+- [x] Gate check passes: `.venv/bin/python -m pytest -q tests/test_providers.py`
+- [x] Test count: 391 + 5 = 396 testes passam
 
 **Tests**: unit
 **Gate**: quick

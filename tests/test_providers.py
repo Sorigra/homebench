@@ -121,3 +121,90 @@ def test_streaming_generate_without_usage_counts_deltas(monkeypatch):
     result = OpenAICompatibleProvider().generate("m", "hi")
     assert result.text == "abc"
     assert result.speed.output_tokens == 3  # fell back to delta count
+
+
+# =====================================================================
+# reasoning_content counts as generated output (PERF-01..PERF-04)
+# =====================================================================
+def _stream(monkeypatch, lines, clock=None):
+    """Point generate() at a canned SSE stream; optionally script the clock."""
+    import homebench.providers.openai_compat as mod
+    monkeypatch.setattr(mod.httpx, "stream", lambda *a, **k: _FakeStream(lines))
+    if clock is not None:
+        ticks = iter(clock)
+        monkeypatch.setattr(mod.time, "perf_counter", lambda: next(ticks))
+
+
+# a reasoning model: every token arrives in reasoning_content, content is null
+REASONING_ONLY = [
+    'data: {"choices":[{"delta":{"role":"assistant","content":null}}]}',
+    'data: {"choices":[{"delta":{"reasoning_content":"The"}}]}',
+    'data: {"choices":[{"delta":{"reasoning_content":" user"}}]}',
+    'data: {"choices":[{"delta":{"reasoning_content":" asks"}}]}',
+    'data: {"choices":[],"usage":{"prompt_tokens":22,"completion_tokens":3}}',
+    "data: [DONE]",
+]
+
+MIXED = [
+    'data: {"choices":[{"delta":{"reasoning_content":"Think"}}]}',
+    'data: {"choices":[{"delta":{"reasoning_content":" more"}}]}',
+    'data: {"choices":[{"delta":{"reasoning_content":" still"}}]}',
+    'data: {"choices":[{"delta":{"content":"42"}}]}',
+    'data: {"choices":[{"delta":{"content":"."}}]}',
+    "data: [DONE]",
+]
+
+
+def test_reasoning_only_stream_reports_a_real_rate(monkeypatch):
+    _stream(monkeypatch, REASONING_ONLY)
+
+    result = OpenAICompatibleProvider().generate("m", "hi")
+
+    assert result.speed.tokens_per_sec > 0     # was 0.00 before this feature
+    assert result.speed.ttft_s > 0
+    assert result.speed.output_tokens == 3
+    assert result.text == ""                   # reasoning is not the answer
+
+
+def test_ttft_is_taken_at_the_first_reasoning_token(monkeypatch):
+    # clock: start=10.0, first token=10.5, end=12.5
+    _stream(monkeypatch, REASONING_ONLY, clock=[10.0, 10.5, 12.5])
+
+    speed = OpenAICompatibleProvider().generate("m", "hi").speed
+
+    assert speed.ttft_s == 0.5                 # the reasoning token set it
+    assert speed.eval_s == 2.0
+    assert speed.tokens_per_sec == 1.5         # 3 tokens / 2.0 s
+
+
+def test_generation_text_carries_content_only(monkeypatch):
+    _stream(monkeypatch, MIXED)
+
+    result = OpenAICompatibleProvider().generate("m", "hi")
+
+    assert result.text == "42."                # what the grader receives
+
+
+def test_content_and_reasoning_token_counts_are_separate(monkeypatch):
+    _stream(monkeypatch, MIXED)
+
+    speed = OpenAICompatibleProvider().generate("m", "hi").speed
+
+    assert speed.content_tokens == 2
+    assert speed.reasoning_tokens == 3
+
+    _stream(monkeypatch, REASONING_ONLY)
+    speed = OpenAICompatibleProvider().generate("m", "hi").speed
+    assert speed.content_tokens == 0
+    assert speed.reasoning_tokens == 3
+
+
+def test_mixed_stream_counts_both_kinds_in_the_decode_window(monkeypatch):
+    # clock: start=0.0, first token (reasoning)=1.0, end=6.0
+    _stream(monkeypatch, MIXED, clock=[0.0, 1.0, 6.0])
+
+    speed = OpenAICompatibleProvider().generate("m", "hi").speed
+
+    assert speed.output_tokens == 5            # 3 reasoning + 2 content
+    assert speed.eval_s == 5.0                 # window opens at the reasoning
+    assert speed.tokens_per_sec == 1.0         # 5 tokens / 5.0 s
