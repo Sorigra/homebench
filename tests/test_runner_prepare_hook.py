@@ -74,6 +74,28 @@ def test_hook_error_fails_only_that_model():
     assert by_name["smart:8b"].speed.tokens_per_sec > 0       # still measured
 
 
+def test_prepare_runs_before_warmup_for_every_model():
+    provider = FakeProvider()
+    events = []
+    orig_warmup = provider.warmup
+
+    def spy_warmup(model, **kw):
+        events.append(("warmup", model))
+        return orig_warmup(model, **kw)
+
+    provider.warmup = spy_warmup
+    runner = Runner(
+        provider,
+        RunConfig(sample_rss=False, warmup=True, run_quality=False, quick=False),
+        prepare_model=lambda m: events.append(("prepare", m.name)) or None,
+    )
+    runner.run(provider.list_models())
+    assert events == [
+        ("prepare", "fast:1b"), ("warmup", "fast:1b"),
+        ("prepare", "smart:8b"), ("warmup", "smart:8b"),
+    ]
+
+
 def test_prepare_phase_event_is_emitted_per_model():
     provider = FakeProvider()
     seen = []

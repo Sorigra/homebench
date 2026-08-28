@@ -344,15 +344,28 @@ def _prepare_router_models(provider, models, args, console: Console):
 
     overrides = load_overrides()
     manager = ModelLifecycleManager(client)
+    # What this run is allowed to unload without asking again: the residents
+    # the user just approved, plus the models the run itself measures (choosing
+    # them for the benchmark IS the authorisation -- AD-007). Anything else that
+    # turns up resident mid-run is a third party we did not get to confirm.
+    approved = our_names | set(foreign)
+
+    def _authorise(plan):
+        surprise = [v for v in plan.to_unload if v not in approved]
+        if surprise:
+            raise ProviderError(
+                "a model not part of this run became resident during it ("
+                + ", ".join(surprise)
+                + "); re-run so it can be confirmed before unloading"
+            )
+        return True
 
     def prepare(model):
         state = next((m for m in client.list_models() if m.id == model.name), None)
         params = resolve(state, overrides=overrides) if state else LoadParams()
         if params.origin not in _SENDABLE_ORIGINS:
             params = LoadParams(extra_args=[], origin=params.origin)
-        # Everything still resident here is either an already-approved foreign
-        # model or one this run loaded itself, so the plan is pre-authorised.
-        outcome = manager.ensure_only(model.name, params, lambda _plan: True)
+        outcome = manager.ensure_only(model.name, params, _authorise)
         return outcome.effective_args
 
     return True, prepare

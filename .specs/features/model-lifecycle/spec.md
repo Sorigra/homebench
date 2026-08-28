@@ -114,8 +114,12 @@ para um terceiro, e o usuário escolheu explicitamente esse comportamento.
 
 **Acceptance Criteria**:
 
-1. WHEN o módulo precisa descarregar um modelo residente THEN o sistema SHALL exibir quais
-   modelos serão descarregados e pedir confirmação antes de agir.
+1. WHEN o módulo precisa descarregar um modelo residente **que este run não vai medir** THEN o
+   sistema SHALL exibir quais modelos serão descarregados e pedir confirmação antes de agir.
+   *(Escopo ajustado em AD-007: escolher um modelo para o benchmark já autoriza descarregá-lo
+   e recarregá-lo no turno dele. Um modelo de terceiro que aparecer residente durante o run —
+   fora da lista aprovada — falha só aquele modelo, com aviso para re-rodar, em vez de ser
+   descarregado sem confirmação.)*
 2. WHERE a flag `--force-unload` estiver presente o sistema SHALL descarregar sem pedir
    confirmação.
 3. IF a entrada não for interativa e `--force-unload` estiver ausente THEN o sistema SHALL
@@ -264,7 +268,8 @@ build do router não expõe requisições ativas) e o retry ao atingir `--models
 | Requisito | Status |
 | --- | --- |
 | MLC-01, MLC-03, MLC-09 | ✅ Verificado — a garantia roda por modelo via o `prepare_model` hook do `Runner` (Fix 1) |
-| MLC-02, MLC-04, MLC-05, MLC-07, MLC-08, MLC-10, MLC-12 | ✅ Verificado |
+| MLC-02, MLC-04, MLC-05, MLC-07, MLC-10, MLC-12 | ✅ Verificado |
+| MLC-08 | ✅ Verificado; escopo da confirmação ajustado por AD-007 + salvaguarda contra residente inesperado no meio do run |
 | MLC-06 | ✅ Verificado (timeout de carga + load POST que falha não deixa nada carregado) |
 | MLC-11 | ✅ Verificado (Fix 4 — teste de isolamento de falha no meio do run) |
 | MLC-13 | ✅ Verificado, exceto o nível heurístico de `-ngl`, inalcançável no ambiente atual (adiado, AD-006) |

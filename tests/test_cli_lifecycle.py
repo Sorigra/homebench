@@ -11,6 +11,7 @@ from rich.console import Console
 
 from homebench import cli
 from homebench.models import ModelInfo
+from homebench.providers.base import ProviderError
 from tests.test_lifecycle_manager import FakeRouter, _state
 
 
@@ -184,6 +185,39 @@ def test_hook_makes_each_model_the_sole_resident_and_reports_its_args(monkeypatc
     # only the last model stays resident
     assert [s.id for s in client._states if s.status == "loaded"] == ["m3"]
     assert seen_args["m2"] == ["/app/llama-server", "-m", "/models/m2.gguf"]
+
+
+def test_each_model_is_resolved_and_loaded_with_its_own_override(monkeypatch, tmp_path):
+    # the per-model closure must key off the model it is handed, not models[0]
+    monkeypatch.setenv("HOMEBENCH_HOME", str(tmp_path))
+    (tmp_path / "load-params.json").write_text(
+        '{"m1": ["-ngl", "10"], "m2": ["-ngl", "20"]}')
+    monkeypatch.setattr(cli.sys, "stdin", _Stdin(False))
+    provider = _router_provider(_state("m1", "unloaded", ["-ngl", "99"]),
+                                _state("m2", "unloaded", ["-ngl", "99"]))
+
+    _, hook = cli._prepare_router_models(
+        provider, [_mi("m1"), _mi("m2")], _args(argv=["--force-unload"]), _console())
+    hook(_mi("m1"))
+    hook(_mi("m2"))
+
+    loads = {c[1]: c[2] for c in provider._client.calls if c[0] == "load"}
+    assert loads == {"m1": ["-ngl", "10"], "m2": ["-ngl", "20"]}
+
+
+def test_a_model_that_becomes_resident_mid_run_is_not_unloaded_silently(monkeypatch):
+    monkeypatch.setattr(cli.sys, "stdin", _Stdin(False))
+    provider = _router_provider(_state("m1", "unloaded"), _state("m2", "unloaded"))
+
+    _, hook = cli._prepare_router_models(
+        provider, [_mi("m1"), _mi("m2")], _args(argv=["--force-unload"]), _console())
+    hook(_mi("m1"))
+    provider._client._states.append(_state("intruder", "loaded"))   # a third party
+
+    with pytest.raises(ProviderError) as exc:
+        hook(_mi("m2"))
+    assert "intruder" in str(exc.value)
+    assert "intruder" in [s.id for s in provider._client._states if s.status == "loaded"]
 
 
 def test_server_resolved_preset_is_not_echoed_back_as_extra_args(monkeypatch):

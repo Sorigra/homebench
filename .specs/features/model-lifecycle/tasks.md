@@ -740,7 +740,36 @@ leaderboard e emitida como `phase="warning"`.
 - [x] Gate: 356 passam
 **Commit**: `fix(runner): surface best-effort unload failures on the model report`
 
-### Adiado (AD-006) — não implementado nesta feature
+## Fix Tasks — iteração 2 (pós re-verificação)
+
+A iteração 2 do Verifier (`validation.md`) confirmou M16 morta (bloqueador fechado) e apontou 2
+sobreviventes dentro do próprio Fix 1 + 1 achado de escopo.
+
+### G1 — closure por modelo, não `models[0]` ✅
+
+- [x] `_prepare_router_models.prepare` resolve estado/params pelo modelo recebido; teste com 2
+      modelos e overrides distintos (`test_each_model_is_resolved_and_loaded_with_its_own_override`)
+- [x] Mata M28a
+**Commit**: `test(cli): pin per-model override resolution in the prepare hook`
+
+### G2 — `prepare` antes do `warmup` ✅
+
+- [x] Teste com `warmup=True` fixando a ordem `prepare → warmup` por modelo
+      (`test_prepare_runs_before_warmup_for_every_model`)
+- [x] Mata M31
+**Commit**: incluído em G1 (mesma correção de cobertura)
+
+### G3 — narrowing da MLC-08 registrado + salvaguarda ✅
+
+- [x] AD-007 registra o escopo ajustado da confirmação; MLC-08 AC1 amendada
+- [x] `_authorise` levanta `ProviderError` se um residente fora da lista aprovada aparecer no
+      meio do run — falha só aquele modelo, não descarrega o intruso
+      (`test_a_model_that_becomes_resident_mid_run_is_not_unloaded_silently`)
+- [x] AD-006 corrigido: justificativa do "aviso de requisição em voo" e da heurística de `-ngl`
+**Commit**: `fix(cli): guard against an unapproved model appearing mid-run`
+
+### Adiado (AD-006 / AD-007) — não implementado nesta feature
 
 MLC-15 (comparar backends), aviso de requisição em voo, retry de `--models-max`, heurística de
-`-ngl` no caminho de produção, teste de não-dedup cross-backend. Motivos em STATE.md § AD-006.
+`-ngl` no caminho de produção, teste de não-dedup cross-backend. Motivos em STATE.md § AD-006 e
+§ AD-007.

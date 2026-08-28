@@ -120,8 +120,35 @@ Adiado, com motivo:
 | Comparação Vulkan vs ROCm de dois hosts | MLC-15 (P3) | Nunca foi MVP. Os dois hosts rodam builds diferentes (`b10615` vs `b10664`), então a comparação mistura backend com versão e é inválida hoje. Reabrir quando os builds convergirem. |
 | Aviso de "requisição em voo" antes de descarregar | Edge case / risco 2 do plano | O build `b10615` do router **não expõe** contagem de requisições ativas em nenhum endpoint verificado (`/props`, `/v1/models`, `/models/sse`). A confirmação obrigatória (AD-002) já cobre o risco de fundo. Reabrir se um build futuro adicionar `/slots` ao router. |
 | `--models-max` atingido durante carga ⇒ liberar o mais antigo e repetir | Edge case | O `plan()` já descarrega **todos** os outros residentes antes de carregar (MLC-03), então o limite nunca é atingido no caminho da ferramenta. Moot por construção. |
-| Heurística de `-ngl` no caminho de produção | MLC-13 P2 AC5 | O router sempre preenche `status.args` (tem preset para tudo em `/home/ai-models`), então `resolve()` sempre cai em `preset` e a heurística nunca dispara. O código e os testes de `suggest_ngl` ficam para quando existir um modelo sem preset. |
+| Heurística de `-ngl` no caminho de produção | MLC-13 P2 AC5 | O CLI (`_prepare_router_models`) nunca passa `hardware=`/`file_bytes=` para `resolve()`, então o nível heurístico nunca é alcançado — `suggest_ngl` fica testado mas sem chamador em `src/`. Ligar isso é uma adição de feature, não uma correção; adiado. |
 | Mesmo modelo nos dois backends sem deduplicar | Edge case | N/A por construção: cada `LlamaRouterClient` fala com um host só e o run usa um provider por vez. E o edge case pede "ids diferentes" — não há o que deduplicar. |
+
+O aviso de "requisição em voo" continua adiado (o router não publica requisições ativas), mas
+a mitigação que o justificava mudou: ver AD-007.
+
+---
+
+### AD-007 — Escopo da confirmação de descarga após o hook por modelo
+
+**Data:** 2026-08-28 · **Status:** Aceita (segue a intenção do Fix 1, aprovado pelo usuário)
+
+O Fix 1 (garantia por modelo dentro do `Runner`) mudou, de fato, quando a confirmação da MLC-08
+é pedida. A iteração 2 do Verifier apontou que isso estreitou uma AC P1 sem registro.
+
+**Decisão.** A confirmação (`MLC-08 AC1`) cobre os modelos residentes que **o run não vai medir**
+— tipicamente uma sessão de terceiro no Open WebUI. Escolher um modelo para o benchmark **é** a
+autorização para descarregá-lo e recarregá-lo no turno dele; pedir confirmação a cada troca de
+modelo num run de vários seria absurdo e o `--models-max 2` torna a troca rotina.
+
+**Salvaguarda.** Se um modelo que **não** está na lista aprovada (nem é medido pelo run, nem
+estava residente e aprovado no início) aparecer residente durante o run, o `prepare` daquele
+modelo levanta `ProviderError` — falha só aquele modelo, com mensagem para re-rodar — em vez de
+descarregar o intruso silenciosamente. (`cli.py::_prepare_router_models._authorise`,
+`tests/test_cli_lifecycle.py::test_a_model_that_becomes_resident_mid_run_is_not_unloaded_silently`.)
+
+**Consequência para AD-006.** O item "aviso de requisição em voo" segue adiado, mas sua
+justificativa agora é a salvaguarda acima + a confirmação up-front, não uma confirmação por
+descarga individual.
 
 ---
 
