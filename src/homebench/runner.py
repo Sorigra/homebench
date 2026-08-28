@@ -206,9 +206,15 @@ class Runner:
                 self.provider.unload(model.name)
                 unload_err = getattr(self.provider, "last_unload_error", None)
                 if unload_err:
-                    report.warnings.append(f"unload failed: {unload_err}")
+                    # Self-describing: ModelReport.warnings are read out of
+                    # context (leaderboard, saved JSON), so each note names
+                    # its own model rather than relying on a renderer to
+                    # prefix it -- that prefixing is what doubled the model
+                    # name in the live output before this fix.
+                    note = f"{model.name}: unload failed: {unload_err}"
+                    report.warnings.append(note)
                     _emit(observer, EV_PHASE, model=model.name,
-                          phase="warning", note=f"unload failed: {unload_err}")
+                          phase="warning", note=note)
         except ProviderError as exc:
             report.error = str(exc)
             _emit(observer, EV_PHASE, model=model.name, phase="error", note=str(exc))

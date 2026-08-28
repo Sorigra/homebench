@@ -17,11 +17,13 @@ from rich.text import Text
 from .models import BenchmarkResult, ModelInfo, ModelReport
 from .report import (
     fmt_quality,
-    fmt_tps,
     fmt_ttft,
-    rank_reports,
+    leaderboard_rows,
+    _decode_cell,
+    _depth_cell,
     _memory_display,
     _peak_display,
+    _prefill_cell,
 )
 from .runner import (
     EV_MODEL_DONE,
@@ -41,6 +43,9 @@ class PlainReporter:
         self.progress: Dict[str, int] = {n: 0 for n in self.order}
         self.reports: Dict[str, ModelReport] = {}
         self.current: Optional[str] = None
+        #: the depth currently being measured, per model -- shown in Status
+        #: while the sweep runs so a long run doesn't read as a hang.
+        self.depth: Dict[str, int] = {}
 
     # observer callback -------------------------------------------------
     def __call__(self, event: str, **data) -> None:
@@ -53,6 +58,8 @@ class PlainReporter:
                 self.status[data["model"]] = "error"
             else:
                 self.status[data["model"]] = phase
+                if phase == "speed" and "depth" in data:
+                    self.depth[data["model"]] = data["depth"]
         elif event == EV_TASK_DONE:
             self.progress[data["model"]] = self.progress.get(data["model"], 0) + 1
         elif event == EV_MODEL_DONE:
@@ -66,6 +73,8 @@ class PlainReporter:
         if s == "quality":
             done = self.progress.get(name, 0)
             return Text(f"quality {done}/{self.total_tasks}", style="yellow")
+        if s == "speed" and name in self.depth:
+            return Text(f"speed · depth {self.depth[name]}", style="cyan")
         colors = {
             "done": "green", "error": "red", "queued": "dim",
             "warmup": "cyan", "speed": "cyan", "starting": "cyan", "prepare": "cyan",
@@ -78,27 +87,32 @@ class PlainReporter:
         table.add_column("Status")
         table.add_column("Quality", justify="right")
         table.add_column("Pass", justify="right")
-        table.add_column("tok/s", justify="right", style="green")
+        table.add_column("Depth", justify="right")
+        table.add_column("Prefill tok/s", justify="right")
+        table.add_column("Decode tok/s", justify="right", style="green")
         table.add_column("TTFT", justify="right")
         table.add_column("Memory", justify="right")
         table.add_column("Peak", justify="right", style="dim")
 
         done = [self.reports[n] for n in self.order if n in self.reports]
         pending = [n for n in self.order if n not in self.reports]
-        for r in rank_reports(done):
+        for row in leaderboard_rows(BenchmarkResult(reports=done)):
+            r = row.report
             if r.error:
                 table.add_row(r.model.name, Text("error", style="red"),
-                              "–", "–", "–", "–", "–", "–")
+                              "–", "–", "–", "–", "–", "–", "–", "–")
                 continue
             passed = f"{r.tasks_passed}/{len(r.task_results)}" if r.task_results else "–"
             table.add_row(
                 r.model.name, Text("done", style="green"),
                 fmt_quality(r.quality_score), passed,
-                fmt_tps(r.speed.tokens_per_sec), fmt_ttft(r.speed.ttft_s),
+                _depth_cell(row), _prefill_cell(row), _decode_cell(row),
+                fmt_ttft(row.ttft_s),
                 _memory_display(r), _peak_display(r),
             )
         for n in pending:
-            table.add_row(n, self._status_text(n), "–", "–", "–", "–", "–", "–")
+            table.add_row(n, self._status_text(n),
+                          "–", "–", "–", "–", "–", "–", "–", "–")
 
         header = Text("homebench — benchmarking local models", style="bold magenta")
         return Group(header, table)
@@ -129,5 +143,8 @@ def run_plain(runner: Runner, models: List[ModelInfo], console: Console) -> Benc
     console.print(leaderboard_table(result, title="Final leaderboard"))
     for rep in result.reports:
         for note in rep.warnings:
-            console.print(f"[yellow]warning[/yellow] · {rep.model.name}: {note}")
+            # ``note`` already names its own model (ModelReport.warnings are
+            # self-describing); prefixing it again here is what doubled the
+            # model name in the output before this fix.
+            console.print(f"[yellow]warning[/yellow] · {note}")
     return result

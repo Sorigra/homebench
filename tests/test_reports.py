@@ -343,3 +343,42 @@ def _fake_run_with_default_depths():
     runner = Runner(provider, RunConfig(sample_rss=False, use_cache=False,
                                         run_quality=False))
     return provider, runner.run(provider.list_models())
+
+
+# =====================================================================
+# plainui live table: depth/prefill/decode columns + depth in Status (T14)
+# =====================================================================
+def test_plainui_live_table_has_depth_prefill_decode_columns():
+    from homebench.plainui import PlainReporter
+
+    reporter = PlainReporter([ModelInfo("fast:1b", "ollama")], total_tasks=0)
+    headers = [str(c.header) for c in reporter.render().renderables[1].columns]
+    assert "Depth" in headers
+    assert "Prefill tok/s" in headers
+    assert "Decode tok/s" in headers
+    assert "tok/s" not in headers
+
+
+def test_plainui_status_shows_the_current_depth_during_the_speed_phase():
+    from homebench.plainui import PlainReporter
+    from homebench.runner import EV_PHASE
+
+    reporter = PlainReporter([ModelInfo("fast:1b", "ollama")], total_tasks=0)
+    reporter(EV_PHASE, model="fast:1b", phase="speed", depth=8192)
+    text = reporter._status_text("fast:1b")
+    assert "8192" in str(text)
+    assert "speed" in str(text)
+
+
+def test_plainui_final_leaderboard_prints_one_line_per_measured_depth():
+    provider = FakeProvider()
+    runner = Runner(provider, RunConfig(sample_rss=False, use_cache=False,
+                                        run_quality=False,
+                                        depths=[0, 8192, 32768]))
+    console = Console(file=io.StringIO(), width=200, force_terminal=False)
+
+    from homebench.plainui import run_plain
+
+    run_plain(runner, provider.list_models(), console)
+    out = console.file.getvalue()
+    assert out.count("fast:1b") >= 3   # one row per depth in the final table

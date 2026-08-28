@@ -44,7 +44,9 @@ def _run(provider, **cfg):
 def test_unload_failure_is_recorded_on_the_report_warnings():
     result, _ = _run(_UnloadFailsProvider({"fast:1b"}))
     by_name = {r.model.name: r for r in result.reports}
-    assert by_name["fast:1b"].warnings == ["unload failed: router said no for fast:1b"]
+    # Self-describing (names its own model), matching every other note in
+    # ModelReport.warnings -- see the depth-skip and empty-generation notes.
+    assert by_name["fast:1b"].warnings == ["fast:1b: unload failed: router said no for fast:1b"]
     assert by_name["fast:1b"].error is None            # the run did not fail
     assert by_name["smart:8b"].warnings == []          # its unload succeeded
 
@@ -72,7 +74,7 @@ def test_warnings_survive_json_round_trip():
     result, _ = _run(_UnloadFailsProvider({"fast:1b"}))
     restored = BenchmarkResult.from_dict(json.loads(json.dumps(result.to_dict())))
     by_name = {r.model.name: r for r in restored.reports}
-    assert by_name["fast:1b"].warnings == ["unload failed: router said no for fast:1b"]
+    assert by_name["fast:1b"].warnings == ["fast:1b: unload failed: router said no for fast:1b"]
 
 
 def test_old_reports_without_warnings_still_load():

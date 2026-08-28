@@ -392,7 +392,7 @@ T17
 
 ---
 
-### T14: Tabela ao vivo do `plainui`
+### T14: Tabela ao vivo do `plainui` ✅ Complete
 
 **What**: o renderizador Rich não-TUI mostrando profundidade, prefill e decode, e o progresso por profundidade.
 **Where**: `src/homebench/plainui.py`
@@ -403,10 +403,10 @@ T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Colunas novas presentes na tabela ao vivo
-- [ ] O evento `EV_PHASE` com profundidade aparece na coluna Status
-- [ ] Gate check passes: `.venv/bin/python -m pytest -q tests/test_reports.py tests/test_cli.py`
-- [ ] Test count: 441 + 3 = 444 testes passam
+- [x] Colunas novas presentes na tabela ao vivo
+- [x] O evento `EV_PHASE` com profundidade aparece na coluna Status
+- [x] Gate check passes: `.venv/bin/python -m pytest -q tests/test_reports.py tests/test_cli.py`
+- [x] Test count: 441 + 3 = 444 testes passam
 
 **Tests**: unit
 **Gate**: quick
