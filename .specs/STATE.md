@@ -182,25 +182,34 @@ orçamento. 17/17 ACs com evidência `file:line`. Sensor de discriminação: 6 m
 Ressalva registrada: a spec e a validação têm o mesmo autor, então erro de origem na spec teria
 menor chance de ser pego.
 
-### Próximo passo — teste de aceitação ao vivo (não feito)
+### Estado do release
+
+**Mesclada e taguada localmente em 2026-08-28.** `main` = merge `--no-ff` `8046893` + bump
+`76bee68`, versão **0.13.0** nos dois arquivos (`pyproject.toml`, `src/homebench/__init__.py`,
+runtime confirmado), tag **`v0.13.0`**. Suíte e build gate verdes na `main` depois do merge:
+449 passam, 5 pulados; `twine check` PASSOU nos dois artefatos.
+
+**Nada enviado para remoto.** `main` local está à frente de `origin/main`; a tag `v0.13.0` só
+existe localmente. `git push` e `git push --tags` continuam exigindo autorização explícita.
+
+A branch `feat/perf-metrics` ainda existe (não deletada).
+
+### Pendência real: teste de aceitação ao vivo
+
+**Nunca foi executado.** A feature foi mesclada com a validação determinística verde, mas sem
+confirmação contra o router de verdade. Rodar:
 
 ```bash
 export LLAMACPP_API_KEY="$(cat ~/llm-server/llama/api-key.txt)"
 .venv/bin/homebench run --provider llamacpp --host http://127.0.0.1:8080 \
-  --no-quality -m gemma4-e2b --force-unload --no-tui
+  --no-quality -m Ornith-1.5-35B-A3B-Q8 --depths 0 --force-unload --no-tui
 ```
 
-Esperado, das medições feitas antes da implementação (prefill / decode tok/s):
-0 → 2714 / 95.1 · 8k → 2709 / 83.3 · 32k → 1805 / 73.0. E `-m Ornith-1.5-35B-A3B-Q8 --depths 0`
-deve dar ≈54 tok/s com TTFT ≈129 ms, onde antes dava `0.00`.
+Esperado ≈54 tok/s, TTFT ≈129 ms (antes da feature: `0.00`). Para ver a varredura inteira,
+`-m gemma4-e2b` sem `--depths`: decode 95.1 → 83.3 → 73.0 e prefill 2714 → 2709 → 1805.
+Num modelo de 35B a varredura padrão é lenta — o prefill de 32k domina.
 
-**Atenção:** a varredura padrão é lenta num modelo de 35B (o prefill de 32k domina). Use
-`--depths 0` para o teste rápido.
-
-### Depois disso
-
-Merge em `main` + bump de versão para **0.13.0** em `pyproject.toml` **e**
-`src/homebench/__init__.py` (os dois, per `AGENTS.md`), tag `v0.13.0`. Nada disso feito ainda.
+Se o teste ao vivo reprovar, o conserto vai em cima da `main` como `fix`, com bump para 0.13.1.
 
 ### Regra nova desta sessão
 
