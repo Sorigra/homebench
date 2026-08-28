@@ -154,12 +154,14 @@ descarga individual.
 
 ## Handoff
 
-**Onde parou:** feature `model-lifecycle` **implementada e verificada** em 2026-08-28.
-Execute concluído (T1–T17) + 3 iterações de correção pós-verificação. `validate_state.py
-model-lifecycle` → 0 erros. `validation.md` → veredito **PASS** (§ Iteration 3).
+**Onde parou:** feature `model-lifecycle` **implementada, verificada, mesclada e lançada** em
+2026-08-28. `validation.md` → **PASS** (§ Iteration 3). `validate_state.py` → 0 erros.
 
-**Estado do git:** branch `feat/model-lifecycle`, ~13 commits à frente da `main`, **nada
-enviado ao remoto**. Árvore limpa. `git push` continua exigindo autorização explícita.
+**Estado do git:** mesclada na `main` (merge `--no-ff` `7200f94`), versão bumpada para
+**0.12.0** (`993c44c`), tag **`v0.12.0`**. `main` e a tag **enviadas para o fork**
+`Sorigra/homebench` (autorizado pelo usuário). Branch `feat/model-lifecycle` deletada
+(local; nunca foi pra remoto). Nada foi para o repo original. `git push` continua exigindo
+autorização explícita por operação.
 
 **Testes:** 162 (antes) → **373 passam, 5 pulados** (`tests/test_live_router.py`, só roda com
 `HOMEBENCH_LIVE=1`, nunca no CI). Python local 3.14; CI cobre 3.9–3.12.
@@ -203,10 +205,13 @@ Confirmado ao vivo: `qwen35-4b` devolve `content: ""` com o texto em `reasoning_
 
 ### Próximos passos possíveis
 
-1. Rodar o teste ao vivo opt-in (com confirmação do usuário).
-2. Abrir PR de `feat/model-lifecycle` (exige autorização de `git push`).
-3. Próximas features do fork: painel GPU AMD, perfis de teste, fluxo guiado na TUI — todas
-   consomem `lifecycle/` sem modificá-lo.
+1. ~~Rodar o teste ao vivo~~ — feito, 5/5 verde.
+2. ~~Mesclar + taguear~~ — feito, `v0.12.0` no fork.
+3. Próximas features do fork (planejar em outra sessão): **painel GPU AMD**, **perfis de
+   teste** (tamanhos de prompt/contexto), **fluxo guiado na TUI** — todas consomem
+   `lifecycle/` sem modificá-lo.
+4. `docs/USO.md` — guia de uso deste ambiente (criado nesta sessão).
+5. Se um dia quiser publicar no PyPI: `RELEASING.md` (upload é manual, precisa de token).
 
 ### Autorizações e proibições permanentes
 
