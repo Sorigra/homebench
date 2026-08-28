@@ -143,6 +143,28 @@ aparece pulada, com o motivo, e as demais seguem normalmente.
 
 ---
 
+## 5b. A coluna `Memory`
+
+`Memory` é o **tamanho do modelo residente**; `Peak` é o crescimento de RSS do processo do
+servidor durante o run.
+
+Aqui o `Peak` sozinho **mente para baixo**: com `--n-gpu-layers 999` os pesos vão para a memória
+da GPU e nunca entram no resident set do `llama-server` — o `Ornith-1.5-35B-A3B-Q8`, que ocupa
+37,8 GB, aparecia com 2,3 GB de Peak e `Memory` em branco.
+
+O `homebench` agora lê o argv que o router resolveu (`GET /v1/models` → `status.args`), pega o
+caminho do `--model` e mede o GGUF. Como o servidor roda em container, o caminho que ele reporta
+(`/models/...`) não existe deste lado do mount; diga onde é no host:
+
+```bash
+export HOMEBENCH_MODEL_DIR=/home/ai-models
+```
+
+Sem essa variável a coluna fica **em branco** — nunca um número inventado. Se o modelo for um
+GGUF dividido (`-00001-of-00003.gguf`), o total soma todos os pedaços.
+
+---
+
 ## 6. Testar parâmetros de carga (`-ngl`, contexto, flash attention)
 
 Crie `~/.homebench/load-params.json` com os flags extras por modelo:

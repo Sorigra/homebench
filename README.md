@@ -37,7 +37,7 @@ There are great tools for *one* half of this problem, but nothing local-first th
 | **Prefill tok/s** | Prompt-processing rate at that depth. Read from the backend's own `timings` object when it reports one (llama.cpp); shown as `–` rather than a fake `0.00` when the backend doesn't expose it. Runs an order of magnitude faster than decode — don't expect them on the same scale. |
 | **Decode tok/s** | Output tokens ÷ generation time at that depth. Backend `timings` when available; otherwise timed client-side from the token stream — including tokens streamed as `reasoning_content` by reasoning models, which used to be silently dropped and made those models read as `0.00 tok/s`. Excludes prompt processing and model load. |
 | **TTFT** | Wall-clock time to the first streamed token, from either regular or reasoning output (minus model-load time where the runner reports it). |
-| **Memory** | Two numbers, labeled: **Memory** = resident model size the runner reports (Ollama `/api/ps`, LM Studio `/api/v0`); **Peak** = peak process-RSS *growth* of the backend, sampled across the whole run (load + speed + every quality task), not one call. Best-effort — on unified-memory Macs weights live in Metal, so Peak can read low. (Generations are single-turn, so Peak isn't a growing multi-turn-session watermark.) |
+| **Memory** | Two numbers, labeled: **Memory** = resident model size the runner reports (Ollama `/api/ps`, LM Studio `/api/v0`, llama.cpp router: the GGUF it resolved); **Peak** = peak process-RSS *growth* of the backend, sampled across the whole run (load + speed + every quality task), not one call. Best-effort — on unified-memory Macs weights live in Metal, so Peak can read low. (Generations are single-turn, so Peak isn't a growing multi-turn-session watermark.) |
 | **Quality** | 31 deterministically-graded tasks across math, reasoning, factual recall, instruction-following/structured-output, extraction, and code understanding. Optional **LLM-as-judge** adds open-ended tasks (summaries, email, haiku, explanations). |
 | **Value** | A composite 0–100 score blending quality, tok/s, and memory (normalised *within your run*), so homebench can call the **🏆 best model for your laptop** — not just rank them. |
 
@@ -144,7 +144,7 @@ At least one local model runner must be reachable:
 | --- | --- | --- | --- | --- |
 | Ollama | `ollama` | `http://localhost:11434` | `OLLAMA_HOST` | Native API; reports model memory via `/api/ps`. |
 | LM Studio | `lmstudio` | `http://localhost:1234` | `LMSTUDIO_HOST` | Enriches metadata + memory via native `/api/v0`. |
-| llama.cpp | `llamacpp` | `http://localhost:8080` | `LLAMACPP_HOST` | `llama-server`, OpenAI-compatible. |
+| llama.cpp | `llamacpp` | `http://localhost:8080` | `LLAMACPP_HOST` | `llama-server`, OpenAI-compatible. In router mode, **Memory** is the size of the GGUF the router resolved; set `HOMEBENCH_MODEL_DIR` to the host directory when the server runs in a container. |
 | vLLM | `vllm` | `http://localhost:8000` | `VLLM_HOST` | Set `VLLM_API_KEY` if started with `--api-key`. |
 | MLX | `mlx` | `http://localhost:8080` | `MLX_HOST` | Apple-Silicon-native (`mlx_lm.server`). Explicit-only (shares llama.cpp's port). |
 | OpenAI-compatible | `openai` | — | `OPENAI_BASE_URL` | Any `/v1` server (Jan, LocalAI, TGI, …); pass `--host`. |
@@ -280,7 +280,7 @@ The built-in catalog also ships each model's **Ollama tag** (`ollama pull …`) 
 
 - **Quality is a signal, not a leaderboard of record.** The suite is small and English-only (8 tasks in the fast default, 31 with `--full`); it's designed to *separate* your models, not to rank them authoritatively. For serious evals use [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness). The optional LLM-as-judge is noisy, especially with small local judges.
 - **Speed is your-machine-at-that-moment.** tok/s and TTFT depend on current load, thermal state, and memory pressure — a busy laptop (or swapping when low on RAM) will read slower. Numbers are meaningful *relative* to each other on the same run, not as absolute model specs.
-- **Memory is best-effort.** It uses the runner's resident size where exposed (Ollama `/api/ps`, LM Studio `/api/v0`) plus RSS sampling; on unified-memory Macs it's approximate, and client-timed for OpenAI-compatible backends.
+- **Memory is best-effort.** It uses the runner's resident size where exposed (Ollama `/api/ps`, LM Studio `/api/v0`, the llama.cpp router's resolved GGUF) plus RSS sampling; on unified-memory Macs it's approximate, and client-timed for OpenAI-compatible backends.
 - **`fit` sizes are estimates** (weights + KV cache + overhead) — treat "fits/tight" as guidance, not a guarantee. HuggingFace param counts come from safetensors metadata, which is missing for GGUF-only or gated repos.
 - **Throughput scaling only appears on batching servers** (vLLM, etc.); a single local model serializes requests.
 

@@ -196,3 +196,78 @@ def test_tokenize_is_none_when_the_route_or_the_host_is_missing(httpx_mock):
 
     httpx_mock.add_exception(httpx.ConnectError("no route"), url=f"{PLAIN}/tokenize")
     assert LlamaCppProvider(host=PLAIN).tokenize("m", "hi") is None
+
+
+# =====================================================================
+# memory(): the footprint comes from the GGUF the router resolved
+# =====================================================================
+def _models_response(model_path, model="qwen35-4b"):
+    return {"data": [{
+        "id": model,
+        "status": {
+            "value": "unloaded",
+            "args": ["/usr/bin/llama-server", "--model", model_path,
+                     "--n-gpu-layers", "999"],
+        },
+    }]}
+
+
+def _gguf(directory, name, size):
+    path = directory / name
+    path.write_bytes(b"\0" * size)
+    return path
+
+
+def test_memory_reports_the_size_of_the_model_file(httpx_mock, tmp_path):
+    gguf = _gguf(tmp_path, "qwen35-4b.gguf", 4096)
+    provider = _router_provider(httpx_mock)
+    httpx_mock.add_response(url=f"{ROUTER}/v1/models",
+                            json=_models_response(str(gguf)))
+
+    assert provider.memory("qwen35-4b").size_bytes == 4096
+
+
+def test_memory_maps_a_container_path_through_homebench_model_dir(
+        httpx_mock, tmp_path, monkeypatch):
+    # the server reports /models/qwen35-4b/w.gguf; the host mounts it from
+    # tmp_path, and the mount point itself is not discoverable over HTTP
+    host_dir = tmp_path / "ai-models" / "qwen35-4b"
+    host_dir.mkdir(parents=True)
+    _gguf(host_dir, "w.gguf", 2048)
+    monkeypatch.setenv("HOMEBENCH_MODEL_DIR", str(tmp_path / "ai-models"))
+
+    provider = _router_provider(httpx_mock)
+    httpx_mock.add_response(
+        url=f"{ROUTER}/v1/models",
+        json=_models_response("/models/qwen35-4b/w.gguf"))
+
+    assert provider.memory("qwen35-4b").size_bytes == 2048
+
+
+def test_memory_sums_every_shard_of_a_split_gguf(httpx_mock, tmp_path):
+    for n in (1, 2, 3):
+        _gguf(tmp_path, "big-%05d-of-00003.gguf" % n, 1000)
+    first = tmp_path / "big-00001-of-00003.gguf"
+    provider = _router_provider(httpx_mock)
+    httpx_mock.add_response(url=f"{ROUTER}/v1/models",
+                            json=_models_response(str(first)))
+
+    assert provider.memory("qwen35-4b").size_bytes == 3000
+
+
+def test_memory_is_empty_when_the_file_cannot_be_reached(
+        httpx_mock, tmp_path, monkeypatch):
+    monkeypatch.delenv("HOMEBENCH_MODEL_DIR", raising=False)
+    provider = _router_provider(httpx_mock)
+    httpx_mock.add_response(
+        url=f"{ROUTER}/v1/models",
+        json=_models_response("/models/qwen35-4b/w.gguf"))
+
+    # blank beats a guess: an unreachable path is not a footprint of zero
+    assert provider.memory("qwen35-4b").size_bytes == 0
+
+
+def test_memory_is_empty_off_router(httpx_mock):
+    httpx_mock.add_response(url=f"{PLAIN}/props", json={"role": "server"})
+
+    assert LlamaCppProvider(host=PLAIN).memory("qwen35-4b").size_bytes == 0

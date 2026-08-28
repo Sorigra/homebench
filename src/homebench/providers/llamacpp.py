@@ -12,14 +12,26 @@ globally: the two hosts of a machine can run different builds (AD-004).
 
 from __future__ import annotations
 
-from typing import Optional
+import os
+import re
+from typing import List, Optional
 
 import httpx
 
+from ..models import MemoryMetrics
 from .openai_compat import OpenAICompatibleProvider
 
 #: /tokenize is cheap, but a 32k prompt still has to cross the wire
 _TOKENIZE_TIMEOUT = 30.0
+
+#: Host directory the server's model directory is mounted from. Needed only
+#: when the server runs in a container: its ``--model`` path is then a path
+#: inside that container, which does not exist on this side of the mount.
+MODEL_DIR_ENV = "HOMEBENCH_MODEL_DIR"
+
+#: llama.cpp names a split model ``<stem>-00001-of-00003.gguf`` and the argv
+#: carries only the first shard, so the footprint is the sum of the set.
+_SHARD_RE = re.compile(r"^(?P<stem>.+)-\d{5}-of-(?P<total>\d{5})\.gguf$")
 
 
 class LlamaCppProvider(OpenAICompatibleProvider):
@@ -77,6 +89,44 @@ class LlamaCppProvider(OpenAICompatibleProvider):
             return None
         return len(tokens)
 
+    def memory(self, model: str) -> MemoryMetrics:
+        """Footprint of ``model``, taken from the GGUF the router resolved.
+
+        An OpenAI-compatible server says nothing about memory, and on a
+        GPU-offloading host RSS sampling is blind: with ``--n-gpu-layers`` the
+        weights live in GPU memory and never enter the server process's
+        resident set, so a 38 GB model samples as ~2 GB. The router does
+        publish the argv it resolved for each model, and the ``--model`` file
+        it names is an exact number.
+
+        Unresolvable (not a router, model unknown, file not reachable from
+        here) answers an empty metric -- the column stays blank rather than
+        showing a guess.
+        """
+        path = self._model_file(model)
+        if path is None:
+            return MemoryMetrics()
+        try:
+            return MemoryMetrics(size_bytes=_gguf_bytes(path))
+        except OSError:
+            return MemoryMetrics()
+
+    def _model_file(self, model: str) -> Optional[str]:
+        """Local path of the GGUF the router loads for ``model``, or ``None``."""
+        from .base import ProviderError
+
+        client = self.router()
+        if client is None:
+            return None
+        try:
+            states = client.list_models()
+        except ProviderError:
+            return None
+        argv = next((s.args for s in states if s.id == model), None)
+        if argv is None:
+            return None
+        return _resolve_model_path(_model_arg(argv))
+
     def unload(self, model: str) -> None:
         """Evict ``model`` on a router host; a no-op anywhere else.
 
@@ -95,3 +145,57 @@ class LlamaCppProvider(OpenAICompatibleProvider):
             return None
         self.last_unload_error = None
         return None
+
+
+# ----------------------------------------------------------------------
+def _model_arg(argv: List[str]) -> Optional[str]:
+    """The value of ``--model`` / ``-m`` in a resolved argv."""
+    for flag, value in zip(argv, argv[1:]):
+        if flag in ("--model", "-m"):
+            return value
+    return None
+
+
+def _resolve_model_path(raw: Optional[str]) -> Optional[str]:
+    """Map the server's ``--model`` path to a file readable from here.
+
+    A plain ``llama-server`` names a real host path and resolves directly. A
+    containerised one names a path inside the container (``/models/...``) and
+    the mount point is not discoverable over HTTP, so the caller supplies the
+    host side in ``$HOMEBENCH_MODEL_DIR`` and we drop leading components until
+    the remainder resolves under it.
+    """
+    if not raw:
+        return None
+    if os.path.isfile(raw):
+        return raw
+    host_dir = os.environ.get(MODEL_DIR_ENV)
+    if not host_dir:
+        return None
+    parts = [p for p in raw.split("/") if p]
+    for i in range(len(parts)):
+        candidate = os.path.join(host_dir, *parts[i:])
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def _gguf_bytes(path: str) -> int:
+    """Size of ``path``, summing every shard when it is a split GGUF.
+
+    An incomplete shard set reports only the shard we have rather than
+    extrapolating a total that was never on disk.
+    """
+    match = _SHARD_RE.match(os.path.basename(path))
+    if match is None:
+        return os.path.getsize(path)
+    total = int(match.group("total"))
+    stem = match.group("stem")
+    directory = os.path.dirname(path)
+    shards = [
+        os.path.join(directory, "%s-%05d-of-%05d.gguf" % (stem, n, total))
+        for n in range(1, total + 1)
+    ]
+    if not all(os.path.isfile(s) for s in shards):
+        return os.path.getsize(path)
+    return sum(os.path.getsize(s) for s in shards)
