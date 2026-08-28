@@ -177,7 +177,7 @@ T17
 
 ---
 
-### T5: Ler o `timings` do servidor
+### T5: Ler o `timings` do servidor ✅ Complete
 
 **What**: extrair `prompt_per_second`, `predicted_per_second`, `prompt_ms`, `prompt_n` e `cache_n` do chunk final, com fallback para cronometragem no cliente.
 **Where**: `src/homebench/providers/openai_compat.py`
@@ -188,12 +188,12 @@ T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Com `timings` presente: `prefill_tps` e `tokens_per_sec` vêm do servidor e `timings_source == "server"`
-- [ ] Sem `timings`: `tokens_per_sec` vem do cliente, `prefill_tps is None`, `timings_source == "client"`
-- [ ] `prompt_eval_s` recebe `prompt_ms / 1000` (campo que hoje nunca é escrito)
-- [ ] `cache_n` é preservado para o chamador
-- [ ] Gate check passes: `.venv/bin/python -m pytest -q tests/test_providers.py tests/test_llamacpp_router.py`
-- [ ] Test count: 396 + 5 = 401 testes passam
+- [x] Com `timings` presente: `prefill_tps` e `tokens_per_sec` vêm do servidor e `timings_source == "server"`
+- [x] Sem `timings`: `tokens_per_sec` vem do cliente, `prefill_tps is None`, `timings_source == "client"`
+- [x] `prompt_eval_s` recebe `prompt_ms / 1000` (campo que hoje nunca é escrito)
+- [x] `cache_n` é preservado para o chamador
+- [x] Gate check passes: `.venv/bin/python -m pytest -q tests/test_providers.py tests/test_llamacpp_router.py`
+- [x] Test count: 396 + 5 = 401 testes passam
 
 **Tests**: unit
 **Gate**: quick

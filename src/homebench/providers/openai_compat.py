@@ -106,6 +106,7 @@ class OpenAICompatibleProvider(Provider):
         start = time.perf_counter()
         first_token_at: Optional[float] = None
         usage = None
+        timings = None
 
         try:
             with httpx.stream(
@@ -125,6 +126,11 @@ class OpenAICompatibleProvider(Provider):
                         continue
                     if obj.get("usage"):
                         usage = obj["usage"]
+                    # llama.cpp ships its own timings alongside usage; they
+                    # are measured server-side, free of network and parsing
+                    # noise, so they win over the client stopwatch (PERF-06)
+                    if obj.get("timings"):
+                        timings = obj["timings"]
                     for choice in obj.get("choices", []):
                         delta = choice.get("delta") or {}
                         piece = delta.get("content") or ""
@@ -160,7 +166,24 @@ class OpenAICompatibleProvider(Provider):
             speed.eval_s = max(0.0, end - first_token_at)
             if speed.eval_s > 0 and speed.output_tokens > 0:
                 speed.tokens_per_sec = speed.output_tokens / speed.eval_s
-        return GenerationResult(text="".join(chunks), speed=speed)
+
+        cache_hit_tokens = 0
+        if timings:
+            speed.timings_source = "server"
+            speed.prompt_eval_s = float(timings.get("prompt_ms") or 0.0) / 1000.0
+            # 0 is not a plausible rate: read it as "the server didn't say"
+            prefill = timings.get("prompt_per_second")
+            speed.prefill_tps = float(prefill) if prefill else None
+            decode = timings.get("predicted_per_second")
+            if decode:
+                speed.tokens_per_sec = float(decode)
+            prompt_n = timings.get("prompt_n")
+            if prompt_n is not None:
+                speed.prompt_tokens = int(prompt_n)
+            cache_hit_tokens = int(timings.get("cache_n") or 0)
+
+        return GenerationResult(text="".join(chunks), speed=speed,
+                                cache_hit_tokens=cache_hit_tokens)
 
     # ------------------------------------------------------------------
     def memory(self, model: str) -> MemoryMetrics:

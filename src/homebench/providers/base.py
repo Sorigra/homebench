@@ -24,6 +24,10 @@ class GenerationResult:
 
     text: str = ""
     speed: SpeedMetrics = field(default_factory=SpeedMetrics)
+    #: prompt tokens the server served from a reused KV cache
+    #: (llama.cpp's ``timings.cache_n``). Anything above 0 means the prefill
+    #: rate of this generation is not a cold measurement.
+    cache_hit_tokens: int = 0
 
 
 # Called with each text chunk as it streams in.

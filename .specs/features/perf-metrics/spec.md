@@ -161,9 +161,9 @@ já salvos em `~/.homebench/runs/`.
 | PERF-03 | P1: tok/s de raciocínio | T1, T4 | Pending |
 | PERF-04 | P1: tok/s de raciocínio | T4 | Pending |
 | PERF-05 | P1: tok/s de raciocínio | Design | Pending |
-| PERF-06 | P2: prefill vs decode | Design | Pending |
-| PERF-07 | P2: prefill vs decode | Design | Pending |
-| PERF-08 | P2: prefill vs decode | Design | Pending |
+| PERF-06 | P2: prefill vs decode | T5 | Pending |
+| PERF-07 | P2: prefill vs decode | T5 | Pending |
+| PERF-08 | P2: prefill vs decode | T5 | Pending |
 | PERF-09 | P2: prefill vs decode | Design | Pending |
 | PERF-10 | P3: varredura de profundidade | Design | Pending |
 | PERF-11 | P3: varredura de profundidade | T3, T16 | Pending |
