@@ -177,12 +177,29 @@ subcomando `models`, `--force-unload`), `doctor.py` (checagens do router).
 AD-006 (itens adiados: MLC-15, aviso de requisição em voo, retry `--models-max`, heurística
 `-ngl` em produção, dedup cross-backend) · AD-007 (escopo da confirmação após o hook por modelo).
 
-### Teste ao vivo — NÃO executado
+### Teste ao vivo — EXECUTADO, 5/5 verde (2026-08-28)
 
-`tests/test_live_router.py` foi escrito mas nunca rodado contra `:8080`/`:8081`. Roda o ciclo
-completo (load → geração → unload → restaura estado) e **falha de propósito se os builds dos
-dois hosts divergirem** (hoje `b10615` vs `b10664`). Rodar exige `HOMEBENCH_LIVE=1` e é uma
-ação que toca serviço de produção — confirmar com o usuário antes.
+`HOMEBENCH_LIVE=1 .venv/bin/python -m pytest -q tests/test_live_router.py` rodou contra os dois
+routers de produção-dev. **5/5 passa** em ~12 s; estado dos routers restaurado ("nada carregado"
+nos dois). Autorizado pelo usuário ("ambiente de produção de desenvolvimento").
+
+Três fatos do ambiente que o teste passou a tratar (commit de melhoria):
+- Os caminhos `-m` do router são de dentro do container (`/models/...`); mapeados para o host
+  via `HOMEBENCH_LIVE_MODEL_DIR` (default `/home/ai-models`).
+- "Menor arquivo" pegava a cabeça draft Eagle3 de 849 MB do `gpt-oss-120b` e dava timeout;
+  agora é "menor arquivo ≥ 1,5 GB" ou `HOMEBENCH_LIVE_MODEL` fixo.
+- `POST /models/unload` no build `b10664` **descarrega de forma assíncrona** — retorna antes de
+  `GET /v1/models` parar de mostrar o modelo. O teste faz polling (30 s) em vez de checar na hora.
+  Isso vale para o produto: `ensure_only` se auto-corrige (replaneja e re-descarrega), mas vale
+  saber.
+
+**Builds convergiram:** os dois hosts agora reportam `b10664-e70802a01` (a divergência
+`b10615` vs `b10664` do plano está resolvida upstream). Isso remove um dos motivos do adiamento
+do MLC-15 — a comparação Vulkan vs ROCm agora é válida; falta só a superfície de CLI de dois
+hosts.
+
+Confirmado ao vivo: `qwen35-4b` devolve `content: ""` com o texto em `reasoning_content`
+(MLC-16, fora de escopo) — o parser de stream do homebench não lê `reasoning_content`.
 
 ### Próximos passos possíveis
 
