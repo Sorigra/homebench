@@ -1,0 +1,88 @@
+"""Orchestrate "make sure only this model is loaded, with these parameters".
+
+Headless (AD-005): the only import outside this package is the repo's shared
+``ProviderError``. User interaction enters through an injected ``Confirmer``
+callable, never through ``input()``.
+
+``plan()`` is deliberately separate from ``ensure_only()`` (TD-03): the decision
+becomes inspectable data, testable without I/O, and showable to the user before
+anything is unloaded.
+"""
+
+from __future__ import annotations
+
+from typing import Any, List, Optional
+
+from ..providers.base import ProviderError
+from .models import LifecyclePlan, LoadParams
+
+
+def _is_sublist(needle: List[str], haystack: List[str]) -> bool:
+    """True when ``needle`` appears as a contiguous run inside ``haystack``."""
+    n = len(needle)
+    if n == 0:
+        return True
+    return any(haystack[i:i + n] == needle for i in range(len(haystack) - n + 1))
+
+
+def _args_satisfied(requested: List[str], resolved: List[str]) -> bool:
+    """True when the loaded argv already carries every requested extra arg.
+
+    The router appends ``extra_args`` verbatim to the argv it reports back in
+    ``status.args``, so a contiguous match means "loaded with these parameters".
+    Requesting nothing matches any argv.
+    """
+    return _is_sublist(list(requested or []), list(resolved or []))
+
+
+class ModelLifecycleManager:
+    """Decides and applies router model-state transitions for one host."""
+
+    def __init__(self, client: Any):
+        self.client = client
+
+    # ------------------------------------------------------------------
+    def plan(self, model: str, params: Optional[LoadParams] = None) -> LifecyclePlan:
+        """Decide what to unload and whether to load -- without acting.
+
+        Makes exactly one read (``GET /v1/models``) and no mutation call.
+        Raises :class:`ProviderError` citing the id when the router does not
+        know ``model``, so nothing is loaded for a typo (MLC-02).
+        """
+        params = params or LoadParams()
+        states = self.client.list_models()
+        target = next((m for m in states if m.id == model), None)
+        if target is None:
+            known = ", ".join(sorted(m.id for m in states)) or "none"
+            raise ProviderError(
+                f"Model {model!r} is not known to the router at "
+                f"{getattr(self.client, 'host', '?')} (available: {known})"
+            )
+
+        # MLC-03: every other resident model contends for VRAM, so all of them go.
+        to_unload = [m.id for m in states if m.id != model and m.status == "loaded"]
+        satisfied = _args_satisfied(params.extra_args, target.args)
+
+        if target.status == "loaded" and satisfied:
+            # MLC-04: no unload-and-reload of the target itself.
+            needs_load = False
+            reason = f"{model} is already loaded with the requested parameters"
+        elif target.status == "loaded":
+            needs_load = True
+            to_unload = to_unload + [model]
+            reason = f"{model} is loaded with different parameters and will be reloaded"
+        elif target.status == "loading":
+            needs_load = False
+            reason = f"{model} is already loading; waiting for it to become loaded"
+        else:
+            needs_load = True
+            reason = f"{model} is not loaded and will be loaded"
+
+        if to_unload:
+            reason += "; unloading " + ", ".join(to_unload) + " first"
+        return LifecyclePlan(
+            target=model,
+            to_unload=to_unload,
+            needs_load=needs_load,
+            reason=reason,
+        )

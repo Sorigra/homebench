@@ -317,13 +317,13 @@ design) porque a heurística de `-ngl` precisa do tamanho do arquivo. Sem `hardw
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `plan()` não faz nenhuma chamada de mutação (provado por teste com cliente falso que falha em `load`/`unload`)
-- [ ] Outros modelos residentes entram em `to_unload` — **todos**, não só o excedente (MLC-03)
-- [ ] Alvo já `loaded` com os mesmos parâmetros ⇒ `needs_load = False` e `to_unload` vazio (MLC-04)
-- [ ] Alvo inexistente levanta `ProviderError` citando o id, sem plano (MLC-02)
-- [ ] `reason` é uma frase legível explicando o plano
-- [ ] Gate: `.venv/bin/python -m pytest -q`
-- [ ] Total ≥ 162 + 59 testes passam
+- [x] `plan()` não faz nenhuma chamada de mutação (provado por teste com cliente falso que falha em `load`/`unload`)
+- [x] Outros modelos residentes entram em `to_unload` — **todos**, não só o excedente (MLC-03)
+- [~] Alvo já `loaded` com os mesmos parâmetros ⇒ `needs_load = False` e `to_unload` vazio (MLC-04) — `to_unload` fica vazio quando o alvo é o único residente; havendo outro residente ele continua em `to_unload`, porque a AC3 da spec (MLC-03) manda descarregar **todos** os outros. A AC4 proíbe descarregar/recarregar o **alvo**, e isso é o que o código faz
+- [x] Alvo inexistente levanta `ProviderError` citando o id, sem plano (MLC-02)
+- [x] `reason` é uma frase legível explicando o plano
+- [x] Gate: `.venv/bin/python -m pytest -q`
+- [x] Total ≥ 162 + 59 testes passam — 242 passam
 
 **Tests**: unit
 **Gate**: quick
