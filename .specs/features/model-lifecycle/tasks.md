@@ -138,14 +138,14 @@ T15 → T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `props()` devolve `RouterInfo` a partir de `GET /props`
-- [ ] `is_router()` é `True` só quando `role == "router"`; 404, ausência do campo, JSON inválido e erro de rede ⇒ `False`
-- [ ] 401 levanta `ProviderError` dizendo que a autenticação foi recusada, **sem** ecoar a chave
-- [ ] Router inalcançável levanta `ProviderError` citando o host
-- [ ] Testes com `pytest_httpx` cobrindo: router ok, 401, 404, JSON inválido, rede caída
-- [ ] Nenhum teste faz requisição real
-- [ ] Gate: `.venv/bin/python -m pytest -q`
-- [ ] Total ≥ 162 + 12 testes passam
+- [x] `props()` devolve `RouterInfo` a partir de `GET /props`
+- [x] `is_router()` é `True` só quando `role == "router"`; 404, ausência do campo, JSON inválido e erro de rede ⇒ `False`
+- [x] 401 levanta `ProviderError` dizendo que a autenticação foi recusada, **sem** ecoar a chave
+- [x] Router inalcançável levanta `ProviderError` citando o host
+- [x] Testes com `pytest_httpx` cobrindo: router ok, 401, 404, JSON inválido, rede caída
+- [x] Nenhum teste faz requisição real
+- [x] Gate: `.venv/bin/python -m pytest -q`
+- [x] Total ≥ 162 + 12 testes passam — 190 passam
 
 **Tests**: unit
 **Gate**: quick
