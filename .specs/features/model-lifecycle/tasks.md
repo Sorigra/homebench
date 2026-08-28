@@ -519,12 +519,17 @@ alcançável", enquanto `ProviderError` do cliente já traz o host. `--provider`
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Host router alcançável e autenticado ⇒ `ok`, citando `build_info` e quantos modelos estão residentes
-- [ ] 401 ⇒ `fail` dizendo que a chave foi recusada, **sem** exibir a chave
-- [ ] Inalcançável ⇒ `fail` citando o host, sem stack trace (MLC-12)
-- [ ] `doctor` segue funcionando sem nenhum router presente
-- [ ] Gate: `.venv/bin/python -m pytest -q && .venv/bin/python -m build`
-- [ ] Total ≥ 162 + 104 testes passam
+- [x] Host router alcançável e autenticado ⇒ `ok`, citando `build_info` e quantos modelos estão residentes
+- [x] 401 ⇒ `fail` dizendo que a chave foi recusada, **sem** exibir a chave
+- [x] Inalcançável ⇒ `fail` citando o host, sem stack trace (MLC-12)
+- [x] `doctor` segue funcionando sem nenhum router presente
+- [x] Gate: `.venv/bin/python -m pytest -q && .venv/bin/python -m build`
+- [x] Total ≥ 162 + 104 testes passam — 349 passam
+
+**Nota:** a checagem só roda quando há host llama.cpp em jogo (`_router_expected`: `LLAMACPP_HOST`
+definido **ou** llamacpp detectado alcançável). Sem esse portão, quem roda só Ollama ganharia um
+`fail` novo em `doctor` — e `fail` faz o comando sair com código 1. Host llama.cpp clássico
+(não-router) vira `info`, não `fail`: é um setup saudável.
 
 **Tests**: unit
 **Gate**: build
