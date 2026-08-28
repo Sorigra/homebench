@@ -114,12 +114,12 @@ T15 → T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] As cinco dataclasses existem com os campos do design
-- [ ] `ModelState.from_dict` aceita o payload real de `GET /v1/models` e ignora chaves desconhecidas
-- [ ] `status` fora de `{loaded, loading, unloaded}` é normalizado para `unloaded`
-- [ ] Testes em `tests/test_lifecycle_models.py`
-- [ ] Gate: `.venv/bin/python -m pytest -q`
-- [ ] Total ≥ 162 + 6 testes passam (sem deleções silenciosas)
+- [x] As cinco dataclasses existem com os campos do design
+- [x] `ModelState.from_dict` aceita o payload real de `GET /v1/models` e ignora chaves desconhecidas
+- [x] `status` fora de `{loaded, loading, unloaded}` é normalizado para `unloaded`
+- [x] Testes em `tests/test_lifecycle_models.py`
+- [x] Gate: `.venv/bin/python -m pytest -q`
+- [x] Total ≥ 162 + 6 testes passam (sem deleções silenciosas) — 174 passam
 
 **Tests**: unit
 **Gate**: quick
