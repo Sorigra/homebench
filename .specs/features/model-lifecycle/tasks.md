@@ -262,12 +262,16 @@ T15 → T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `suggest_ngl(file_bytes, budget_bytes)` devolve inteiro ≥ 0
-- [ ] Modelo que cabe folgado sugere offload total; modelo maior que o orçamento sugere 0
-- [ ] Orçamento zero ou negativo devolve 0 em vez de estourar
-- [ ] Testes constroem `HardwareInfo`/`GPUInfo` literais, como `tests/test_hardware_fit.py:35-55`
-- [ ] Gate: `.venv/bin/python -m pytest -q`
-- [ ] Total ≥ 162 + 42 testes passam
+- [x] `suggest_ngl(file_bytes, budget_bytes)` devolve inteiro ≥ 0
+- [x] Modelo que cabe folgado sugere offload total; modelo maior que o orçamento sugere 0
+- [x] Orçamento zero ou negativo devolve 0 em vez de estourar
+- [x] Testes constroem `HardwareInfo`/`GPUInfo` literais, como `tests/test_hardware_fit.py:35-55`
+- [x] Gate: `.venv/bin/python -m pytest -q`
+- [x] Total ≥ 162 + 42 testes passam — 224 passam
+
+**Nota:** a assinatura da tarefa (`suggest_ngl(file_bytes, budget_bytes)`) já recebe bytes prontos,
+então `weight_bytes()`/`kv_cache_bytes()` (que convertem params_b→bytes) não se aplicam; o reuso
+efetivo é `HardwareInfo.memory_budget()` nos testes.
 
 **Tests**: unit
 **Gate**: quick

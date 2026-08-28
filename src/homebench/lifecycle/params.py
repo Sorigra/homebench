@@ -14,6 +14,13 @@ from typing import Dict, List, Optional
 
 _OVERRIDE_FILENAME = "load-params.json"
 
+#: ``-ngl`` value meaning "offload every layer" (llama.cpp treats any large
+#: number this way).
+NGL_ALL = 999
+
+#: Headroom multiplier over raw weight bytes for the KV cache and runtime.
+_MEM_HEADROOM = 1.15
+
 
 def default_home() -> str:
     """``$HOMEBENCH_HOME`` or ``~/.homebench`` (copied from history.py)."""
@@ -48,3 +55,23 @@ def load_overrides(path: Optional[str] = None) -> Dict[str, List[str]]:
         )
         return {}
     return data
+
+
+def suggest_ngl(file_bytes: int, budget_bytes: int) -> int:
+    """Suggest a ``-ngl`` value from the model file size and the memory budget.
+
+    - budget of zero or less, or an unknown file size: ``0`` (CPU only).
+    - model plus headroom fits the budget: :data:`NGL_ALL` (full offload).
+    - model at least as large as the budget: ``0``.
+    - in between: a proportional fraction of the layers.
+
+    Always returns an integer ``>= 0`` (MLC-13, P2 AC5).
+    """
+    if budget_bytes <= 0 or file_bytes <= 0:
+        return 0
+    needed = file_bytes * _MEM_HEADROOM
+    if needed <= budget_bytes:
+        return NGL_ALL
+    if file_bytes >= budget_bytes:
+        return 0
+    return max(0, int(NGL_ALL * (budget_bytes / needed)))
