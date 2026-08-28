@@ -209,11 +209,15 @@ salvo registra o argv efetivo. Use `--label` para marcar:
 Os dois backends rodam sobre a mesma GPU. Rode o mesmo modelo nos dois hosts e compare:
 
 ```bash
+mkdir -p benchmark-results
+
 .venv/bin/homebench run --provider llamacpp --host http://127.0.0.1:8080 \
-  --no-quality -m qwen35-4b --label "vulkan" --json vulkan.json
+  --no-quality -m qwen35-4b --label "vulkan" \
+  --json benchmark-results/vulkan.json
 
 .venv/bin/homebench run --provider llamacpp --host http://127.0.0.1:8081 \
-  --no-quality -m qwen2.5-7b-instruct-q4_k_m-rocm --label "rocm" --json rocm.json
+  --no-quality -m qwen2.5-7b-instruct-q4_k_m-rocm --label "rocm" \
+  --json benchmark-results/rocm.json
 
 .venv/bin/homebench diff
 ```

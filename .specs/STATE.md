@@ -8,7 +8,7 @@ Memória de projeto: log de decisões + snapshot de handoff.
 
 **Data:** 2026-08-28 · **Status:** Aceita
 
-**Contexto.** O documento de produto (`contexto-llm-benchmark.md`) parte da premissa de que a
+**Contexto.** O documento de produto (`docs/contexto-llm-benchmark.md`) parte da premissa de que a
 ferramenta precisa subir o processo `llama-server` com flags (`-ngl`, `-c`, `-fa`), porque o
 homebench upstream não gerencia ciclo de vida de modelo.
 
@@ -213,7 +213,10 @@ antes de comparar esses dois.
 - `git push` / `git push --tags`: **não feito, não autorizado**.
 - `CLAUDE.md` continua modificado na árvore de trabalho desde antes desta feature (reduzido a
   `@AGENTS.md`). Não é mudança destas sessões e nunca foi commitado — decisão do usuário.
-- `homebench-report.md` na raiz é o relatório zerado de 0.12.0 que originou tudo; não rastreado.
+- Saídas rotineiras ficam em `benchmark-results/` (ignorado); resultados que precisam sobreviver
+  à máquina são revisados e arquivados em `docs/benchmarks/` antes de commit/push.
+- O resultado Vulkan que sustentou o trabalho de performance foi preservado em
+  `docs/benchmarks/strix-halo/vulkan-2026-08-28.json`.
 
 ### Regra desta fork
 

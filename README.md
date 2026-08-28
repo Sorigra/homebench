@@ -2,12 +2,12 @@
 
 **Benchmark the local LLMs you already have: speed, memory, *and* quality — as a live terminal leaderboard.**
 
-[![CI](https://github.com/david-g-3654/homebench/actions/workflows/ci.yml/badge.svg)](https://github.com/david-g-3654/homebench/actions/workflows/ci.yml)
+[![CI](https://github.com/Sorigra/homebench/actions/workflows/ci.yml/badge.svg)](https://github.com/Sorigra/homebench/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/homebench)](https://pypi.org/project/homebench/)
 ![Python](https://img.shields.io/pypi/pyversions/homebench)
 ![License](https://img.shields.io/pypi/l/homebench)
 
-![homebench demo](https://cdn.jsdelivr.net/gh/david-g-3654/homebench@main/docs/demo.svg)
+![homebench demo](https://cdn.jsdelivr.net/gh/Sorigra/homebench@main/docs/assets/demo.svg)
 
 `homebench` is a single-command TUI that discovers the models installed in your local runner (**Ollama**, **LM Studio**, **llama.cpp**, **vLLM**, or any **OpenAI-compatible** server), runs a curated quality suite, measures **tokens/sec**, **time-to-first-token**, and **memory footprint** on *your actual machine*, and renders a live comparison leaderboard.
 
@@ -56,7 +56,7 @@ pipx install homebench
 Or from source:
 
 ```bash
-git clone https://github.com/david-g-3654/homebench
+git clone https://github.com/Sorigra/homebench
 cd homebench
 pip install .
 ```
@@ -85,8 +85,9 @@ homebench --judge qwen3:8b       # enable LLM-as-judge (adds open-ended tasks)
 homebench --tasks mypack.yaml    # use a custom task pack instead of the built-in suite
 homebench --add-tasks mypack.yaml  # add a pack on top of the built-in suite
 homebench --label "before tuning"  # tag this run for later diffing
-homebench --md results.md        # also export a Markdown report
-homebench --json results.json    # also export raw JSON
+mkdir -p benchmark-results
+homebench --md benchmark-results/results.md       # also export Markdown
+homebench --json benchmark-results/results.json   # also export raw JSON
 homebench --html report.html     # self-contained, shareable HTML report
 
 homebench doctor                 # diagnose setup: provider, models, hardware, cache
@@ -246,7 +247,7 @@ On a non-batching setup, aggregate throughput stays flat while latency climbs �
 
 ## What can my machine run?
 
-![homebench fit](https://cdn.jsdelivr.net/gh/david-g-3654/homebench@main/docs/fit-demo.svg)
+![homebench fit](https://cdn.jsdelivr.net/gh/Sorigra/homebench@main/docs/assets/fit-demo.svg)
 
 Before benchmarking, `homebench fit` captures your hardware (RAM, CPU, GPU/VRAM, Apple unified memory) and checks a **catalog of ~50 popular models** — SmolLM2, Qwen2.5, Llama 3.x, Gemma 2, Phi-3.5/4, Mistral/Mixtral, DeepSeek-R1, CodeLlama, Yi, Command-R, and more, from 135M up to 141B — against your memory budget, showing which fit and at what quantization:
 
@@ -287,7 +288,7 @@ The built-in catalog also ships each model's **Ollama tag** (`ollama pull …`) 
 ## Development
 
 ```bash
-git clone https://github.com/david-g-3654/homebench
+git clone https://github.com/Sorigra/homebench
 cd homebench
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"

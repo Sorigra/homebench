@@ -7,6 +7,7 @@ each update.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from textual.app import App, ComposeResult
@@ -133,7 +134,8 @@ class HomebenchApp(App):
             table.add_row(
                 r.model.name, "[green]done[/green]",
                 fmt_quality(r.quality_score), passed,
-                _depth_cell(row), _prefill_cell(row), _decode_cell(row),
+                _depth_cell(row), _prefill_cell(row),
+                _decode_cell(row, include_skip_reason=False),
                 fmt_ttft(row.ttft_s),
                 _memory_display(r), _peak_display(r),
             )
@@ -166,8 +168,9 @@ class HomebenchApp(App):
             return
         from ..report import to_markdown
 
-        path = "homebench-report.md"
-        with open(path, "w") as f:
+        path = Path("benchmark-results/homebench-report.md")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as f:
             f.write(to_markdown(self.result))
         self.notify(f"Saved {path}")
 

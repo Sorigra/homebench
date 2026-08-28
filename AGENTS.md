@@ -19,7 +19,7 @@ This checkout is a fork (`Sorigra/homebench`) being adapted into a **raw perform
 benchmarking tool for local LLMs on an AMD Strix Halo mini PC. Quality testing is secondary here
 (`--no-quality`). Read these before planning work on that effort:
 
-- [`contexto-llm-benchmark.md`](contexto-llm-benchmark.md) — product goals, environment, decisions.
+- [`docs/contexto-llm-benchmark.md`](docs/contexto-llm-benchmark.md) — product goals, environment, decisions.
 - [`docs/plano-modulo-ciclo-de-vida.md`](docs/plano-modulo-ciclo-de-vida.md) — plan for the model
   lifecycle module (the main gap), plus the environment findings behind it.
 

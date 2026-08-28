@@ -77,7 +77,7 @@ def test_html_report_is_self_contained_and_populated():
     html = to_html(result)
     assert html.startswith("<!doctype html>")
     assert "<style>" in html and "http" not in html.split("<footer>")[0].replace(
-        "https://github.com/david-g-3654/homebench", "")  # no external assets in body
+        "https://github.com/Sorigra/homebench", "")  # no external assets in body
     assert "Leaderboard" in html
     assert "fast:1b" in html and "smart:8b" in html
     assert "Quality by category" in html
@@ -251,6 +251,20 @@ def test_leaderboard_table_shows_skip_reason_for_a_skipped_depth():
                              reports=[_report_with_depths("small-ctx", points)])
     out = _render(leaderboard_table(result))
     assert reason in out
+
+
+def test_decode_cell_can_hide_skip_reason_for_width_limited_tui():
+    from homebench.report import LeaderboardRow, _decode_cell
+
+    reason = "llamacpp generate failed: " + "x" * 200
+    report = _report_with_depths(
+        "wide-error",
+        [DepthMetrics(depth_requested=32768, skipped=reason)],
+    )
+    row = LeaderboardRow(rank=1, report=report, point=report.depth_results[0])
+
+    assert _decode_cell(row, include_skip_reason=False) == "skipped"
+    assert _decode_cell(row) == f"skipped: {reason}"
 
 
 def test_leaderboard_table_has_depth_prefill_decode_columns():

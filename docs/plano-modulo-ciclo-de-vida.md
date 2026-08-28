@@ -1,7 +1,7 @@
 # Plano — Módulo de gerenciamento de ciclo de vida do modelo
 
 Documento de planejamento. Nenhum código foi escrito ainda.
-Contexto de origem: [`contexto-llm-benchmark.md`](../contexto-llm-benchmark.md).
+Contexto de origem: [`contexto-llm-benchmark.md`](contexto-llm-benchmark.md).
 
 ---
 

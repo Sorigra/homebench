@@ -10,10 +10,12 @@ dist/
 venv/
 env/
 
-# localbench output
-localbench-report.md
-results.md
-results.json
+# Generated benchmark output (local only; archive important runs under
+# docs/benchmarks/ if they must be recoverable from Git)
+/homebench-report.md
+/benchmark-results/
+/results.md
+/results.json
 
 # OS / editor
 .DS_Store
