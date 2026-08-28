@@ -371,11 +371,16 @@ descarregado, nada carregado. `from_dict` continua tolerante a runs antigos.
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Teste varre o AST de todo módulo em `src/homebench/lifecycle/` e falha se importar `tui`, `rich`, `textual`, `runner` ou `providers`
-- [ ] Exceção permitida e explícita: `providers.base.ProviderError` (tipo de erro compartilhado do repo)
-- [ ] O teste falha de fato se um import proibido for introduzido (verificado na hora)
-- [ ] Gate: `.venv/bin/python -m pytest -q`
-- [ ] Total ≥ 162 + 70 testes passam
+- [x] Teste varre o AST de todo módulo em `src/homebench/lifecycle/` e falha se importar `tui`, `rich`, `textual`, `runner` ou `providers`
+- [x] Exceção permitida e explícita: `providers.base.ProviderError` (tipo de erro compartilhado do repo)
+- [x] O teste falha de fato se um import proibido for introduzido (verificado na hora: `import rich` + `from ..runner import RunConfig` em `manager.py` ⇒ `test_lifecycle_module_imports_nothing_forbidden[manager.py]` falhou; revertido)
+- [x] Gate: `.venv/bin/python -m pytest -q && .venv/bin/python -m build`
+- [x] Total ≥ 162 + 70 testes passam — 272 passam
+
+**Nota:** o whitelist é o nó `ImportFrom` exato `from ..providers.base import ProviderError`
+(a forma absoluta também). Alargar para `from ..providers.base import Provider, ProviderError`
+é reprovado, e há teste para isso. Importar `homebench.lifecycle.router` puxa
+`providers/__init__.py` em tempo de execução por causa desse nó — é o único acoplamento aceito.
 
 **Tests**: unit
 **Gate**: build
