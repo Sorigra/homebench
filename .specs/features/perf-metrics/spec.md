@@ -156,29 +156,30 @@ já salvos em `~/.homebench/runs/`.
 
 | Requirement ID | Story | Phase | Status |
 | -------------- | ----- | ----- | ------ |
-| PERF-01 | P1: tok/s de raciocínio | T4 | Pending |
-| PERF-02 | P1: tok/s de raciocínio | T4 | Pending |
-| PERF-03 | P1: tok/s de raciocínio | T1, T4 | Pending |
-| PERF-04 | P1: tok/s de raciocínio | T4 | Pending |
-| PERF-05 | P1: tok/s de raciocínio | Design | Pending |
-| PERF-06 | P2: prefill vs decode | T5 | Pending |
-| PERF-07 | P2: prefill vs decode | T5 | Pending |
-| PERF-08 | P2: prefill vs decode | T5 | Pending |
-| PERF-09 | P2: prefill vs decode | Design | Pending |
-| PERF-10 | P3: varredura de profundidade | Design | Pending |
+| PERF-01 | P1: tok/s de raciocínio | T4 | Done |
+| PERF-02 | P1: tok/s de raciocínio | T4 | Done |
+| PERF-03 | P1: tok/s de raciocínio | T1, T4 | Done |
+| PERF-04 | P1: tok/s de raciocínio | T4 | Done |
+| PERF-05 | P1: tok/s de raciocínio | T11 | Pending |
+| PERF-06 | P2: prefill vs decode | T5 | Done |
+| PERF-07 | P2: prefill vs decode | T5 | Done |
+| PERF-08 | P2: prefill vs decode | T5 | Done |
+| PERF-09 | P2: prefill vs decode | T12 | Pending |
+| PERF-10 | P3: varredura de profundidade | T9, T10 | Pending |
 | PERF-11 | P3: varredura de profundidade | T3, T16 | Pending |
 | PERF-12 | P3: varredura de profundidade | T7, T8 | Pending |
 | PERF-13 | P3: varredura de profundidade | T2, T6, T9 | Pending |
-| PERF-14 | P3: varredura de profundidade | Design | Pending |
-| PERF-15 | P3: varredura de profundidade | Design | Pending |
+| PERF-14 | P3: varredura de profundidade | T9 | Pending |
+| PERF-15 | P3: varredura de profundidade | T10 | Pending |
 | PERF-16 | P3: compatibilidade e saídas | T1, T2, T17 | Pending |
-| PERF-17 | P3: compatibilidade e saídas | Design | Pending |
+| PERF-17 | P3: compatibilidade e saídas | T12, T13, T14, T15, T17 | Pending |
 
 **Mapeamento AC → ID:** PERF-01..05 = P1 AC1..AC5 · PERF-06..09 = P2 AC1..AC4 (P2 AC5 dobra em
 PERF-09) · PERF-10..15 = P3-varredura AC1..AC8 (AC4 dobra em PERF-12, AC8 em PERF-15) ·
 PERF-16..17 = P3-compat AC1..AC4.
 
-**Coverage:** 17 total, 0 mapeados para tasks, 17 não mapeados ⚠️ (a mapear na fase Tasks)
+**Coverage:** 17 total, 17 mapeados para tasks, 0 não mapeados ✅. Concluídos após as fases
+1-2: PERF-01..04, PERF-06..08 (7). Os demais dependem das fases 3-5.
 
 ---
 
