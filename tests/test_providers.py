@@ -332,3 +332,9 @@ def test_every_provider_accepts_cache_prompt(monkeypatch):
     monkeypatch.setattr(omod.httpx, "stream",
                         lambda *a, **k: _FakeStream(ollama_lines))
     assert OllamaProvider().generate("m", "hi", cache_prompt=False).text == "hi"
+
+
+def test_base_provider_tokenize_returns_none(httpx_mock):
+    # the default capability answers "I can't say" without asking anyone
+    assert VLLMProvider().tokenize("m", "hello there") is None
+    assert httpx_mock.get_requests() == []

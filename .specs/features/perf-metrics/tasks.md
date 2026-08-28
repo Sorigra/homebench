@@ -224,7 +224,7 @@ T17
 
 ---
 
-### T7: `Provider.tokenize()` e a implementação llama.cpp
+### T7: `Provider.tokenize()` e a implementação llama.cpp ✅ Complete
 
 **What**: capacidade opcional `tokenize(model, text) -> Optional[int]`, default `None` na base, implementada no `LlamaCppProvider` via `POST /tokenize`.
 **Where**: `src/homebench/providers/base.py`, `src/homebench/providers/llamacpp.py`
@@ -235,11 +235,11 @@ T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Base devolve `None` (nunca uma estimativa disfarçada)
-- [ ] llama.cpp devolve `len(resposta["tokens"])` — formato verificado ao vivo
-- [ ] 404, 400 ou erro de rede devolvem `None` em vez de levantar
-- [ ] Gate check passes: `.venv/bin/python -m pytest -q tests/test_llamacpp_router.py tests/test_providers.py`
-- [ ] Test count: 404 + 4 = 408 testes passam
+- [x] Base devolve `None` (nunca uma estimativa disfarçada)
+- [x] llama.cpp devolve `len(resposta["tokens"])` — formato verificado ao vivo
+- [x] 404, 400 ou erro de rede devolvem `None` em vez de levantar
+- [x] Gate check passes: `.venv/bin/python -m pytest -q tests/test_llamacpp_router.py tests/test_providers.py`
+- [x] Test count: 404 + 4 = 408 testes passam
 
 **Tests**: unit
 **Gate**: quick

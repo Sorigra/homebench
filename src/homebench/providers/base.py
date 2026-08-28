@@ -78,6 +78,15 @@ class Provider(ABC):
         """Memory footprint of the (loaded) model. Best-effort; may be empty."""
         return MemoryMetrics()
 
+    def tokenize(self, model: str, text: str) -> Optional[int]:
+        """Exact token count of ``text`` for ``model``, or ``None``.
+
+        ``None`` means "this backend cannot say" -- never a disguised estimate.
+        Callers that need a number fall back to their own approximation and
+        correct it afterwards from what the server reports having processed.
+        """
+        return None
+
     def warmup(self, model: str, *, timeout: float = 300.0) -> None:
         """Load a model into memory so later timings exclude load time."""
         self.generate(model, "ok", max_tokens=1, timeout=timeout)

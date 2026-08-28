@@ -14,7 +14,12 @@ from __future__ import annotations
 
 from typing import Optional
 
+import httpx
+
 from .openai_compat import OpenAICompatibleProvider
+
+#: /tokenize is cheap, but a 32k prompt still has to cross the wire
+_TOKENIZE_TIMEOUT = 30.0
 
 
 class LlamaCppProvider(OpenAICompatibleProvider):
@@ -45,6 +50,32 @@ class LlamaCppProvider(OpenAICompatibleProvider):
             client = LlamaRouterClient(host=self.host, api_key=self.api_key)
             self._router = client if client.is_router() else None
         return self._router
+
+    def tokenize(self, model: str, text: str) -> Optional[int]:
+        """Count ``text`` in tokens via ``POST /tokenize``, or ``None``.
+
+        Every failure answers ``None``: the route is missing on some builds,
+        and it returns 400 when the model is not resident. Neither is worth
+        interrupting a measurement over.
+        """
+        try:
+            r = httpx.post(
+                f"{self.host}/tokenize",
+                json={"model": model, "content": text},
+                headers=self._headers(), timeout=_TOKENIZE_TIMEOUT,
+            )
+        except httpx.HTTPError:
+            return None
+        if r.status_code != 200:
+            return None
+        try:
+            data = r.json()
+        except ValueError:
+            return None
+        tokens = data.get("tokens") if isinstance(data, dict) else None
+        if not isinstance(tokens, list):
+            return None
+        return len(tokens)
 
     def unload(self, model: str) -> None:
         """Evict ``model`` on a router host; a no-op anywhere else.

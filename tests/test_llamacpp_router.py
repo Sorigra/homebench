@@ -160,3 +160,39 @@ def test_ollama_unload_is_unchanged(httpx_mock):
 
     paths = [r.url.path for r in httpx_mock.get_requests()]
     assert paths == ["/api/generate"]        # still its own keep_alive=0 call
+
+
+# =====================================================================
+# tokenize(): exact prompt-token counts, None when the host can't say
+# Requirement: PERF-12 (support)
+# =====================================================================
+def test_tokenize_counts_the_tokens_the_server_returns(httpx_mock):
+    httpx_mock.add_response(url=f"{PLAIN}/tokenize",
+                            json={"tokens": [818, 3823, 17354, 39935, 35308]})
+
+    provider = LlamaCppProvider(host=PLAIN)
+    assert provider.tokenize("gemma4-e2b", "The quick brown fox jumps") == 5
+
+    posts = [r for r in httpx_mock.get_requests() if r.url.path == "/tokenize"]
+    assert json.loads(posts[0].content) == {
+        "model": "gemma4-e2b", "content": "The quick brown fox jumps",
+    }
+
+
+def test_tokenize_is_none_when_the_model_is_not_loaded(httpx_mock):
+    httpx_mock.add_response(
+        url=f"{PLAIN}/tokenize", status_code=400,
+        json={"error": {"code": 400, "message": "model is not loaded"}},
+    )
+
+    # a measurement must not die because a model is not resident yet
+    assert LlamaCppProvider(host=PLAIN).tokenize("gemma4-e2b", "hi") is None
+
+
+def test_tokenize_is_none_when_the_route_or_the_host_is_missing(httpx_mock):
+    # some builds don't serve /tokenize at all
+    httpx_mock.add_response(url=f"{PLAIN}/tokenize", status_code=404)
+    assert LlamaCppProvider(host=PLAIN).tokenize("m", "hi") is None
+
+    httpx_mock.add_exception(httpx.ConnectError("no route"), url=f"{PLAIN}/tokenize")
+    assert LlamaCppProvider(host=PLAIN).tokenize("m", "hi") is None
