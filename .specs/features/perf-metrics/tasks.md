@@ -201,7 +201,7 @@ T17
 
 ---
 
-### T6: Parâmetro `cache_prompt` em `generate()`
+### T6: Parâmetro `cache_prompt` em `generate()` ✅ Complete
 
 **What**: aceitar `cache_prompt: bool = True` em `Provider.generate` e enviá-lo no corpo da requisição OpenAI-compatível.
 **Where**: `src/homebench/providers/base.py`, `src/homebench/providers/openai_compat.py`
@@ -212,11 +212,11 @@ T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `cache_prompt=False` aparece no corpo JSON enviado
-- [ ] Default `True` não altera o corpo em relação a hoje (nenhuma regressão nos providers existentes)
-- [ ] `FakeProvider` e os demais providers aceitam o parâmetro sem quebrar
-- [ ] Gate check passes: `.venv/bin/python -m pytest -q`
-- [ ] Test count: 401 + 3 = 404 testes passam
+- [x] `cache_prompt=False` aparece no corpo JSON enviado
+- [x] Default `True` não altera o corpo em relação a hoje (nenhuma regressão nos providers existentes)
+- [x] `FakeProvider` e os demais providers aceitam o parâmetro sem quebrar
+- [x] Gate check passes: `.venv/bin/python -m pytest -q`
+- [x] Test count: 401 + 3 = 404 testes passam
 
 **Tests**: unit
 **Gate**: full

@@ -64,8 +64,15 @@ class Provider(ABC):
         seed: Optional[int] = None,
         on_token: TokenCallback = None,
         timeout: float = 300.0,
+        cache_prompt: bool = True,
     ) -> GenerationResult:
-        """Generate a completion, streaming tokens to ``on_token``."""
+        """Generate a completion, streaming tokens to ``on_token``.
+
+        ``cache_prompt=False`` asks the backend not to serve the prompt from a
+        reused KV cache. Measurement passes need it: without it a repeated
+        prompt reports a prefill rate that is really a cache read. Backends
+        with no such control ignore it.
+        """
 
     def memory(self, model: str) -> MemoryMetrics:  # pragma: no cover - optional
         """Memory footprint of the (loaded) model. Best-effort; may be empty."""

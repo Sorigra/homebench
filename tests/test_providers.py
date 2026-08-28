@@ -283,3 +283,52 @@ def test_cache_n_is_preserved_for_the_caller(monkeypatch):
     _stream(monkeypatch, _timed_stream(timings=dict(TIMINGS, cache_n=1478)))
     result = OpenAICompatibleProvider().generate("m", "hi")
     assert result.cache_hit_tokens == 1478     # this prefill reused KV
+
+
+# =====================================================================
+# cache_prompt control on generate() (PERF-13)
+# =====================================================================
+def _capture_body(monkeypatch, lines):
+    """Run generate() against a canned stream and return the JSON body sent."""
+    import homebench.providers.openai_compat as mod
+    sent = {}
+
+    def fake_stream(*a, **k):
+        sent.update(k.get("json") or {})
+        return _FakeStream(lines)
+
+    monkeypatch.setattr(mod.httpx, "stream", fake_stream)
+    return sent
+
+
+def test_cache_prompt_false_is_sent_in_the_request_body(monkeypatch):
+    sent = _capture_body(monkeypatch, _timed_stream())
+
+    OpenAICompatibleProvider().generate("m", "hi", cache_prompt=False)
+
+    assert sent["cache_prompt"] is False
+
+
+def test_cache_prompt_defaults_to_true_and_leaves_the_body_unchanged(monkeypatch):
+    sent = _capture_body(monkeypatch, _timed_stream())
+
+    OpenAICompatibleProvider().generate("m", "hi")
+
+    assert "cache_prompt" not in sent           # byte-identical to before
+    assert sent["model"] == "m"
+    assert sent["stream"] is True
+
+
+def test_every_provider_accepts_cache_prompt(monkeypatch):
+    from homebench.providers.ollama import OllamaProvider
+    from tests.fakes import FakeProvider
+
+    # the in-memory provider the runner tests use
+    assert FakeProvider().generate("fast:1b", "hi", cache_prompt=False).text
+
+    # a provider with no such server-side knob still takes the argument
+    ollama_lines = ['{"response":"hi","done":false}', '{"response":"","done":true}']
+    import homebench.providers.ollama as omod
+    monkeypatch.setattr(omod.httpx, "stream",
+                        lambda *a, **k: _FakeStream(ollama_lines))
+    assert OllamaProvider().generate("m", "hi", cache_prompt=False).text == "hi"

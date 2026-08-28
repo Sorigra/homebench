@@ -87,6 +87,7 @@ class OpenAICompatibleProvider(Provider):
         seed: Optional[int] = None,
         on_token: TokenCallback = None,
         timeout: float = 300.0,
+        cache_prompt: bool = True,
     ) -> GenerationResult:
         payload = {
             "model": model,
@@ -98,6 +99,9 @@ class OpenAICompatibleProvider(Provider):
         }
         if seed is not None:
             payload["seed"] = seed
+        if not cache_prompt:
+            # llama.cpp honours this; servers that don't just ignore it
+            payload["cache_prompt"] = False
 
         speed = SpeedMetrics()
         chunks: List[str] = []
