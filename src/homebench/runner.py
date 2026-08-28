@@ -11,7 +11,7 @@ from __future__ import annotations
 import statistics
 import time
 from dataclasses import dataclass, field
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from .metrics.memory import RSSSampler
 from .models import (
@@ -68,6 +68,11 @@ class RunConfig:
     quick: bool = True              # default to the fast curated subset
     use_cache: bool = True          # reuse cached deterministic responses
     refresh_cache: bool = False     # ignore existing cache, overwrite it
+    # Effective load parameters per model, as resolved by the lifecycle
+    # module (model name -> the argv the backend actually ran with). Saved
+    # with the run so two runs of the same model with different -ngl are
+    # distinguishable in the history (MLC-09).
+    load_params: Optional[Dict[str, List[str]]] = None
 
     def to_dict(self) -> dict:
         return {
@@ -84,6 +89,7 @@ class RunConfig:
             "run_quality": self.run_quality,
             "run_speed": self.run_speed,
             "quick": self.quick,
+            "load_params": {k: list(v) for k, v in (self.load_params or {}).items()},
         }
 
 

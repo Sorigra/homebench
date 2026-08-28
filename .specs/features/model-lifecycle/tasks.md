@@ -428,12 +428,17 @@ run corromperia a TUI de tela cheia.
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Campo de parâmetros de carga existe em `RunConfig` **e** aparece em `to_dict()`
-- [ ] Teste anti-drift compara os campos do dataclass com as chaves de `to_dict()` e falha se divergirem (mitiga o risco registrado no design)
-- [ ] Dois runs do mesmo modelo com `-ngl` diferente são distinguíveis no JSON salvo
-- [ ] Runs antigos sem o campo seguem carregando (`_pick` já garante)
-- [ ] Gate: `.venv/bin/python -m pytest -q`
-- [ ] Total ≥ 162 + 84 testes passam
+- [x] Campo de parâmetros de carga existe em `RunConfig` **e** aparece em `to_dict()`
+- [x] Teste anti-drift compara os campos do dataclass com as chaves de `to_dict()` e falha se divergirem (mitiga o risco registrado no design) — verificado na hora: um campo novo sem entrada em `to_dict()` faz `test_to_dict_serialises_every_runconfig_field` falhar
+- [x] Dois runs do mesmo modelo com `-ngl` diferente são distinguíveis no JSON salvo
+- [x] Runs antigos sem o campo seguem carregando (`_pick` já garante)
+- [x] Gate: `.venv/bin/python -m pytest -q`
+- [x] Total ≥ 162 + 84 testes passam — 293 passam
+
+**Nota:** o teste anti-drift precisa de uma lista explícita de exclusões (`NOT_SERIALISED`),
+porque `to_dict()` já omitia `suite`, `speed_prompt`, `timeout`, `use_cache` e `refresh_cache`
+antes desta feature. As três últimas são dívida pré-existente, **não corrigida aqui** (fora de
+escopo); ficam registradas na lista para que a omissão seja deliberada e visível.
 
 **Tests**: unit
 **Gate**: quick
