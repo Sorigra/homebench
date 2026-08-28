@@ -179,6 +179,11 @@ class Runner:
 
             if cfg.unload_between:
                 self.provider.unload(model.name)
+                unload_err = getattr(self.provider, "last_unload_error", None)
+                if unload_err:
+                    report.warnings.append(f"unload failed: {unload_err}")
+                    _emit(observer, EV_PHASE, model=model.name,
+                          phase="warning", note=f"unload failed: {unload_err}")
         except ProviderError as exc:
             report.error = str(exc)
             _emit(observer, EV_PHASE, model=model.name, phase="error", note=str(exc))

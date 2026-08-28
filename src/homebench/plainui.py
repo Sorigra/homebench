@@ -127,4 +127,7 @@ def run_plain(runner: Runner, models: List[ModelInfo], console: Console) -> Benc
     from .report import leaderboard_table
 
     console.print(leaderboard_table(result, title="Final leaderboard"))
+    for rep in result.reports:
+        for note in rep.warnings:
+            console.print(f"[yellow]warning[/yellow] · {rep.model.name}: {note}")
     return result
