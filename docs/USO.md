@@ -36,6 +36,14 @@ O `homebench` fala com o router por HTTP. Diga qual host e passe a chave:
 ```bash
 export LLAMACPP_HOST=http://127.0.0.1:8080          # vulkan
 export LLAMACPP_API_KEY="$(cat ~/llm-server/llama/api-key.txt)"
+export HOMEBENCH_MODEL_DIR=/home/ai-models          # preenche a coluna Memory
+```
+
+As duas primeiras são obrigatórias. A terceira diz onde os modelos ficam **no host**: sem ela a
+coluna `Memory` sai em branco (ver §5b). Para não redigitar toda vez:
+
+```bash
+echo 'export HOMEBENCH_MODEL_DIR=/home/ai-models' >> ~/.bashrc
 ```
 
 Ou por comando, sem exportar nada:
@@ -244,6 +252,15 @@ Todo run é salvo automaticamente em `~/.homebench/runs/`.
   válido (foi o que aconteceu com o `foundation-sec-8b-q4_k_m` em 32768). Agora vira erro de
   verdade: se a mensagem falar de contexto, aquela profundidade aparece **pulada com o motivo**
   e as outras seguem.
+- **`gpt-oss-120b` mede o modelo errado.** Não existe bloco `[gpt-oss-120b]` no
+  `presets.ini` — só `[gpt-oss-120b-eagle3]`. Esse id foi inventado pelo router varrendo o
+  diretório (`source = models_dir`), e ele pegou o primeiro `.gguf` da pasta em ordem
+  alfabética: o `eagle3-gpt-oss-120b-Q8_0.gguf`, de **849 MB**, que é o modelo de rascunho — não
+  o `gpt-oss-120b-MXFP4.gguf` de 63 GB. Benchmarcar `gpt-oss-120b` mede o draft. Use
+  **`gpt-oss-120b-eagle3`**, que tem preset explícito e está correto (MXFP4 como `--model`, o
+  eagle3 como `spec-draft-model`). Corrigir de vez pede um bloco `[gpt-oss-120b]` no
+  `presets.ini` — e isso só entra em vigor **reiniciando o container**, o que é decisão sua e
+  fora do que o `homebench` faz.
 - **`POST /models/unload` é assíncrono** no build `b10664`: retorna antes de o modelo sumir de
   `GET /v1/models`. O `homebench` se auto-corrige (replaneja no próximo modelo), mas se você
   inspecionar na mão logo após, pode ver o modelo ainda `loaded` por alguns segundos.
