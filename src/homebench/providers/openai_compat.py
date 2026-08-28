@@ -128,6 +128,15 @@ class OpenAICompatibleProvider(Provider):
                         obj = json.loads(data)
                     except json.JSONDecodeError:
                         continue
+                    # An in-stream failure arrives as an error object on a 200
+                    # response. Left unread it looks like a generation that
+                    # simply produced nothing -- the same 0.00 tok/s that
+                    # reads as a real result (PERF-05).
+                    if isinstance(obj, dict) and obj.get("error"):
+                        raise ProviderError(
+                            f"{self.name} generate failed for {model!r}: "
+                            f"{_stream_error(obj['error'])}"
+                        )
                     if obj.get("usage"):
                         usage = obj["usage"]
                     # llama.cpp ships its own timings alongside usage; they
@@ -193,3 +202,10 @@ class OpenAICompatibleProvider(Provider):
     def memory(self, model: str) -> MemoryMetrics:
         # OpenAI-compatible servers don't expose memory; rely on RSS sampling.
         return MemoryMetrics()
+
+
+def _stream_error(err) -> str:
+    """Human-readable text of an error object streamed inside a 200 response."""
+    if isinstance(err, dict):
+        return str(err.get("message") or err)
+    return str(err)

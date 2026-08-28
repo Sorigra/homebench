@@ -238,6 +238,12 @@ Todo run é salvo automaticamente em `~/.homebench/runs/`.
   129 ms, um resultado com cara de válido mas completamente falso. Um `reasoning_content` não
   vazio agora conta para TTFT, tempo de decode e contagem de tokens, e o mesmo modelo mede
   ≈54 tok/s reais.
+- **Erro no meio do stream.** O `llama-server` pode devolver `200` e mandar
+  `data: {"error": ...}` dentro do stream — por exemplo quando o prompt estoura a janela de
+  contexto. Antes isso passava despercebido e virava mais um `0.00 tok/s` com cara de resultado
+  válido (foi o que aconteceu com o `foundation-sec-8b-q4_k_m` em 32768). Agora vira erro de
+  verdade: se a mensagem falar de contexto, aquela profundidade aparece **pulada com o motivo**
+  e as outras seguem.
 - **`POST /models/unload` é assíncrono** no build `b10664`: retorna antes de o modelo sumir de
   `GET /v1/models`. O `homebench` se auto-corrige (replaneja no próximo modelo), mas se você
   inspecionar na mão logo após, pode ver o modelo ainda `loaded` por alguns segundos.

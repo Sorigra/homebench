@@ -5,6 +5,7 @@ import pytest
 from homebench.providers import (
     LlamaCppProvider,
     OpenAICompatibleProvider,
+    ProviderError,
     VLLMProvider,
     available_providers,
     get_provider,
@@ -338,3 +339,34 @@ def test_base_provider_tokenize_returns_none(httpx_mock):
     # the default capability answers "I can't say" without asking anyone
     assert VLLMProvider().tokenize("m", "hello there") is None
     assert httpx_mock.get_requests() == []
+
+
+# =====================================================================
+# an error object streamed inside a 200 response is a failure, not silence
+# =====================================================================
+def test_in_stream_error_raises_instead_of_reporting_zero(monkeypatch):
+    lines = [
+        'data: {"error":{"code":500,"message":'
+        '"the request exceeds the available context size"}}',
+        "data: [DONE]",
+    ]
+    _stream(monkeypatch, lines)
+
+    with pytest.raises(ProviderError) as excinfo:
+        OpenAICompatibleProvider().generate("m", "hi")
+
+    assert "context size" in str(excinfo.value)
+
+
+def test_in_stream_error_after_partial_output_still_raises(monkeypatch):
+    lines = [
+        'data: {"choices":[{"delta":{"content":"par"}}]}',
+        'data: {"error":"instance died"}',
+        "data: [DONE]",
+    ]
+    _stream(monkeypatch, lines)
+
+    with pytest.raises(ProviderError) as excinfo:
+        OpenAICompatibleProvider().generate("m", "hi")
+
+    assert "instance died" in str(excinfo.value)
