@@ -273,7 +273,7 @@ def test_cmd_run_hands_the_prepare_hook_to_the_runner(monkeypatch):
     provider = _router_provider(_state("target", "unloaded"))
     captured = {}
 
-    def fake_build(prov, args, prepare_hook=None):
+    def fake_build(prov, args, prepare_hook=None, depths=None):
         captured["hook"] = prepare_hook
         raise _Stop
 
@@ -285,3 +285,53 @@ def test_cmd_run_hands_the_prepare_hook_to_the_runner(monkeypatch):
     with pytest.raises(_Stop):
         cli.cmd_run(_args(argv=["--force-unload"]), _console())
     assert callable(captured["hook"])
+
+
+# =====================================================================
+# --depths flows into the runner / aborts before touching a model (T16)
+# =====================================================================
+def test_cmd_run_default_depths_is_the_three_point_sweep(monkeypatch):
+    provider = _router_provider(_state("target", "unloaded"))
+    captured = {}
+
+    def fake_build(prov, args, prepare_hook=None, depths=None):
+        captured["depths"] = depths
+        raise _Stop
+
+    monkeypatch.setattr(cli, "_resolve_provider", lambda args, console: provider)
+    monkeypatch.setattr(cli, "_select_models", lambda p, a, c: [_mi("target")])
+    monkeypatch.setattr(cli, "_build_runner", fake_build)
+    monkeypatch.setattr(cli.sys, "stdin", _Stdin(False))
+
+    with pytest.raises(_Stop):
+        cli.cmd_run(_args(argv=["--force-unload"]), _console())
+    assert captured["depths"] == [0, 8192, 32768]
+
+
+def test_cmd_run_depths_zero_reproduces_the_pre_sweep_behaviour(monkeypatch):
+    provider = _router_provider(_state("target", "unloaded"))
+    captured = {}
+
+    def fake_build(prov, args, prepare_hook=None, depths=None):
+        captured["depths"] = depths
+        raise _Stop
+
+    monkeypatch.setattr(cli, "_resolve_provider", lambda args, console: provider)
+    monkeypatch.setattr(cli, "_select_models", lambda p, a, c: [_mi("target")])
+    monkeypatch.setattr(cli, "_build_runner", fake_build)
+    monkeypatch.setattr(cli.sys, "stdin", _Stdin(False))
+
+    with pytest.raises(_Stop):
+        cli.cmd_run(_args(argv=["--force-unload", "--depths", "0"]), _console())
+    assert captured["depths"] == [0]
+
+
+def test_cmd_run_invalid_depths_aborts_before_touching_the_provider(monkeypatch):
+    monkeypatch.setattr(cli, "_resolve_provider",
+                        lambda *a, **kw: pytest.fail("provider must not be touched"))
+    monkeypatch.setattr(cli, "_select_models",
+                        lambda *a, **kw: pytest.fail("no model may be selected"))
+    console = _console()
+
+    assert cli.cmd_run(_args(argv=["--depths", "not-a-number"]), console) == 1
+    assert "not-a-number" in _out(console)

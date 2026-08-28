@@ -87,6 +87,7 @@ class OpenAICompatibleProvider(Provider):
         seed: Optional[int] = None,
         on_token: TokenCallback = None,
         timeout: float = 300.0,
+        cache_prompt: bool = True,
     ) -> GenerationResult:
         payload = {
             "model": model,
@@ -98,13 +99,18 @@ class OpenAICompatibleProvider(Provider):
         }
         if seed is not None:
             payload["seed"] = seed
+        if not cache_prompt:
+            # llama.cpp honours this; servers that don't just ignore it
+            payload["cache_prompt"] = False
 
         speed = SpeedMetrics()
         chunks: List[str] = []
-        delta_count = 0
+        content_deltas = 0
+        reasoning_deltas = 0
         start = time.perf_counter()
         first_token_at: Optional[float] = None
         usage = None
+        timings = None
 
         try:
             with httpx.stream(
@@ -124,31 +130,64 @@ class OpenAICompatibleProvider(Provider):
                         continue
                     if obj.get("usage"):
                         usage = obj["usage"]
+                    # llama.cpp ships its own timings alongside usage; they
+                    # are measured server-side, free of network and parsing
+                    # noise, so they win over the client stopwatch (PERF-06)
+                    if obj.get("timings"):
+                        timings = obj["timings"]
                     for choice in obj.get("choices", []):
-                        piece = (choice.get("delta") or {}).get("content") or ""
+                        delta = choice.get("delta") or {}
+                        piece = delta.get("content") or ""
+                        # reasoning models stream their tokens here and send
+                        # content: null -- they cost the same compute, so they
+                        # count as generated tokens (PERF-01)
+                        thought = delta.get("reasoning_content") or ""
+                        if (piece or thought) and first_token_at is None:
+                            first_token_at = time.perf_counter()
                         if piece:
-                            if first_token_at is None:
-                                first_token_at = time.perf_counter()
                             chunks.append(piece)
-                            delta_count += 1
+                            content_deltas += 1
                             if on_token is not None:
                                 on_token(piece)
+                        if thought:
+                            reasoning_deltas += 1
         except httpx.HTTPError as exc:
             raise ProviderError(f"{self.name} generate failed for {model!r}: {exc}")
 
         end = time.perf_counter()
         speed.total_s = end - start
+        # usage doesn't split the two kinds, so the split is delta-counted
+        # (best-effort: ~1 token per delta), same as the no-usage fallback
+        speed.content_tokens = content_deltas
+        speed.reasoning_tokens = reasoning_deltas
         if usage:
             speed.prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
             speed.output_tokens = int(usage.get("completion_tokens", 0) or 0)
         else:
-            speed.output_tokens = delta_count  # best-effort: ~1 token per delta
+            speed.output_tokens = content_deltas + reasoning_deltas
         if first_token_at is not None:
             speed.ttft_s = first_token_at - start
             speed.eval_s = max(0.0, end - first_token_at)
             if speed.eval_s > 0 and speed.output_tokens > 0:
                 speed.tokens_per_sec = speed.output_tokens / speed.eval_s
-        return GenerationResult(text="".join(chunks), speed=speed)
+
+        cache_hit_tokens = 0
+        if timings:
+            speed.timings_source = "server"
+            speed.prompt_eval_s = float(timings.get("prompt_ms") or 0.0) / 1000.0
+            # 0 is not a plausible rate: read it as "the server didn't say"
+            prefill = timings.get("prompt_per_second")
+            speed.prefill_tps = float(prefill) if prefill else None
+            decode = timings.get("predicted_per_second")
+            if decode:
+                speed.tokens_per_sec = float(decode)
+            prompt_n = timings.get("prompt_n")
+            if prompt_n is not None:
+                speed.prompt_tokens = int(prompt_n)
+            cache_hit_tokens = int(timings.get("cache_n") or 0)
+
+        return GenerationResult(text="".join(chunks), speed=speed,
+                                cache_hit_tokens=cache_hit_tokens)
 
     # ------------------------------------------------------------------
     def memory(self, model: str) -> MemoryMetrics:

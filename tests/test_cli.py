@@ -29,3 +29,38 @@ def test_run_flags_parse():
     assert args.no_tui is True
     assert args.limit == 3
     assert args.judge == "m"
+
+
+# =====================================================================
+# --depths flag (T16, PERF-11)
+# =====================================================================
+def test_depths_flag_defaults_to_the_three_point_sweep():
+    parser = build_parser()
+    args = parser.parse_args(_inject_default_command([]))
+    assert args.depths == "0,8192,32768"
+
+
+def test_depths_flag_accepts_a_custom_value():
+    parser = build_parser()
+    args = parser.parse_args(_inject_default_command(["--depths", "0,4096"]))
+    assert args.depths == "0,4096"
+
+
+def test_depths_flag_is_documented_in_help():
+    # top-level --help does not expand subcommand options; check the run
+    # subparser's own help instead.
+    assert "--depths" in _run_subparser_help()
+
+
+def _run_subparser_help() -> str:
+    import io
+    import contextlib
+
+    parser = build_parser()
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        try:
+            parser.parse_args(["run", "--help"])
+        except SystemExit:
+            pass
+    return buf.getvalue()

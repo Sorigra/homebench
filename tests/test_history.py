@@ -145,3 +145,91 @@ def test_non_shared_models_ignored():
     base = _rec(1000.0, [("gone", 20.0, 9, 10)])
     new = _rec(2000.0, [("fresh", 5.0, 1, 10)])
     assert history.regressions(base, new) == []
+
+
+def _write_legacy_run(home: str, started: float, filename: str,
+                      name: str = "gemma4-e2b", tps: float = 95.1) -> None:
+    """A run JSON in exactly the shape homebench wrote before the depth sweep:
+    no ``depth_results`` key at all, on any report."""
+    import json
+    import os
+
+    os.makedirs(os.path.join(home, "runs"), exist_ok=True)
+    legacy = {
+        "provider": "llamacpp",
+        "started_at": started,
+        "finished_at": started + 1,
+        "config": {},
+        "environment": {},
+        "reports": [{
+            "model": {"name": name, "provider": "llamacpp"},
+            "speed": {"tokens_per_sec": tps, "ttft_s": 0.31},
+            "memory": {"size_bytes": 2_000_000_000},
+            "task_results": [],
+            "error": None,
+        }],
+    }
+    with open(os.path.join(home, "runs", filename), "w") as fh:
+        json.dump(legacy, fh)
+
+
+def test_pre_feature_run_json_loads_with_empty_depth_results(tmp_path):
+    """A run saved before the depth sweep existed still loads (PERF-16)."""
+    home = str(tmp_path)
+    _write_legacy_run(home, 1000.0, "20250101-000000.json")
+
+    runs = list_runs(home=home)
+    assert len(runs) == 1
+    result = BenchmarkResult.from_dict(runs[0].data)
+    assert len(result.reports) == 1
+    report = result.reports[0]
+    assert report.depth_results == []
+
+
+# =====================================================================
+# T17: a pre-feature run keeps working in history + diff (PERF-16, PERF-17)
+# =====================================================================
+def test_pre_feature_run_lists_in_history_alongside_a_post_feature_run(tmp_path):
+    home = str(tmp_path)
+    _write_legacy_run(home, 1000.0, "20250101-000000.json")
+    save_run(_make_result(2000.0, [("gemma4-e2b", 83.3, 5, 10)]), home=home)
+
+    runs = list_runs(home=home)
+    assert len(runs) == 2
+    assert resolve_ref("latest", home=home).started_at == 2000.0
+    assert resolve_ref("prev", home=home).started_at == 1000.0   # the legacy run
+
+
+def test_diff_compares_decode_at_depth_zero_across_the_format_change(tmp_path):
+    """``homebench diff`` still reads ``speed.tokens_per_sec`` -- the field a
+    legacy run has and a swept run keeps as its shallowest-depth point
+    (PERF-15) -- so an old and a new-format run diff cleanly (P3-compat AC3).
+    """
+    from homebench.models import DepthMetrics
+
+    home = str(tmp_path)
+    _write_legacy_run(home, 1000.0, "20250101-000000.json",
+                      name="gemma4-e2b", tps=95.1)
+
+    new_report = ModelReport(model=ModelInfo("gemma4-e2b", "llamacpp"))
+    new_report.speed = SpeedMetrics(tokens_per_sec=83.3, ttft_s=1.0)
+    new_report.depth_results = [
+        DepthMetrics(depth_requested=0, depth_actual=22, decode_tps=83.3, ttft_s=1.0),
+        DepthMetrics(depth_requested=8192, depth_actual=8190, decode_tps=70.0),
+    ]
+    save_run(BenchmarkResult(reports=[new_report], provider="llamacpp",
+                             started_at=2000.0, finished_at=2001.0), home=home)
+
+    runs = list_runs(home=home)
+    new, base = runs[0], runs[1]                # newest first
+    assert new.started_at == 2000.0 and base.started_at == 1000.0
+
+    m = history._metrics(next(r for r in new.reports
+                              if r["model"]["name"] == "gemma4-e2b"))
+    assert m["tps"] == 83.3                      # decode at depth 0, not the sweep
+
+    table = diff_table(base, new)
+    assert table.row_count == 1
+
+    regs = history.regressions(base, new)        # 95.1 -> 83.3 is a ~12.4% drop
+    assert len(regs) == 1 and regs[0].metric == "speed"

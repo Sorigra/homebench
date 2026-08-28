@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import html as _html
 import json
+from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional
 
 from rich.table import Table
 
-from .models import BenchmarkResult, ModelReport
+from .models import BenchmarkResult, DepthMetrics, ModelReport
 
 
 # ---- formatting helpers ----------------------------------------------------
@@ -85,13 +86,98 @@ def env_summary(env: dict) -> str:
 
 # ---- ranking ---------------------------------------------------------------
 def rank_reports(reports: List[ModelReport]) -> List[ModelReport]:
-    """Rank by quality first, then throughput. Errored models sink to the end."""
+    """Rank by quality first, then throughput. Errored models sink to the end.
+
+    ``r.speed`` is contractually the shallowest measured context depth
+    (PERF-15), so this also ranks by "decode at the smallest depth" per the
+    spec's P3 AC8 without needing to know about depths here.
+    """
 
     def key(r: ModelReport):
         q = r.quality_score if r.quality_score is not None else -1
         return (r.error is not None, -q, -r.speed.tokens_per_sec)
 
     return sorted(reports, key=key)
+
+
+# ---- leaderboard rows: one per (model, depth) -------------------------------
+@dataclass
+class LeaderboardRow:
+    """One leaderboard line: a model at one measured context depth.
+
+    ``point`` is ``None`` for a report with no ``depth_results`` -- an error,
+    or a run saved before the depth sweep existed (PERF-16 AC2). The derived
+    properties then fall back to ``report.speed``, the single pre-sweep
+    measurement, so callers never need to branch on which shape they got.
+    """
+
+    rank: int
+    report: ModelReport
+    point: Optional[DepthMetrics] = None
+
+    @property
+    def depth(self) -> Optional[int]:
+        """Depth actually measured (or requested, if skipped); ``None`` with no sweep."""
+        if self.point is None:
+            return None
+        return self.point.depth_requested if self.point.skipped else self.point.depth_actual
+
+    @property
+    def skipped(self) -> Optional[str]:
+        return self.point.skipped if self.point is not None else None
+
+    @property
+    def prefill_tps(self) -> Optional[float]:
+        if self.point is None:
+            return self.report.speed.prefill_tps
+        return self.point.prefill_tps
+
+    @property
+    def decode_tps(self) -> float:
+        if self.point is None:
+            return self.report.speed.tokens_per_sec
+        return self.point.decode_tps
+
+    @property
+    def ttft_s(self) -> float:
+        if self.point is None:
+            return self.report.speed.ttft_s
+        return self.point.ttft_s
+
+
+def leaderboard_rows(result: BenchmarkResult) -> List[LeaderboardRow]:
+    """Expand each report into one row per measured depth, in rank order.
+
+    A model with ``depth_results`` becomes one row per point, in the order
+    they were measured. A model with none (error, or a legacy run) becomes
+    exactly one row with ``point=None`` (PERF-16 AC2). The single shared
+    helper keeps the terminal table, the Markdown/JSON/HTML exports, and the
+    live renderers from diverging on what a "row" means (PERF-17 AC4).
+    """
+    rows: List[LeaderboardRow] = []
+    for i, r in enumerate(rank_reports(result.reports), start=1):
+        if r.depth_results:
+            for point in r.depth_results:
+                rows.append(LeaderboardRow(rank=i, report=r, point=point))
+        else:
+            rows.append(LeaderboardRow(rank=i, report=r, point=None))
+    return rows
+
+
+def _depth_cell(row: LeaderboardRow) -> str:
+    return "–" if row.point is None else str(row.depth)
+
+
+def _prefill_cell(row: LeaderboardRow) -> str:
+    if row.skipped:
+        return "–"
+    return fmt_tps(row.prefill_tps)
+
+
+def _decode_cell(row: LeaderboardRow) -> str:
+    if row.skipped:
+        return f"skipped: {row.skipped}"
+    return fmt_tps(row.decode_tps)
 
 
 # ---- Rich table (shared by CLI + TUI) --------------------------------------
@@ -102,28 +188,32 @@ def leaderboard_table(result: BenchmarkResult, title: str = "homebench") -> Tabl
     table.add_column("Params", justify="right")
     table.add_column("Quality", justify="right")
     table.add_column("Pass", justify="right")
-    table.add_column("tok/s", justify="right", style="green")
+    table.add_column("Depth", justify="right")
+    table.add_column("Prefill tok/s", justify="right")
+    table.add_column("Decode tok/s", justify="right", style="green")
     table.add_column("TTFT", justify="right")
     table.add_column("Memory", justify="right")
     table.add_column("Peak", justify="right", style="dim")
 
-    ranked = rank_reports(result.reports)
-    for i, r in enumerate(ranked, start=1):
+    for row in leaderboard_rows(result):
+        r = row.report
         if r.error:
             table.add_row(
-                str(i), r.model.name, r.model.parameter_size or "–",
-                "[red]error[/red]", "–", "–", "–", "–", "–",
+                str(row.rank), r.model.name, r.model.parameter_size or "–",
+                "[red]error[/red]", "–", "–", "–", "–", "–", "–", "–",
             )
             continue
         passed = f"{r.tasks_passed}/{len(r.task_results)}" if r.task_results else "–"
         table.add_row(
-            str(i),
+            str(row.rank),
             r.model.name,
             r.model.parameter_size or "–",
             fmt_quality(r.quality_score),
             passed,
-            fmt_tps(r.speed.tokens_per_sec),
-            fmt_ttft(r.speed.ttft_s),
+            _depth_cell(row),
+            _prefill_cell(row),
+            _decode_cell(row),
+            fmt_ttft(row.ttft_s),
             _memory_display(r),
             _peak_display(r),
         )
@@ -156,23 +246,27 @@ def to_markdown(result: BenchmarkResult) -> str:
     scores = value_scores(result.reports)
     lines.append("## Leaderboard")
     lines.append("")
-    lines.append("| # | Model | Params | Quality | Pass | tok/s | TTFT | Memory | Peak | Value |")
-    lines.append("|---|-------|-------:|--------:|-----:|------:|-----:|-------:|-----:|------:|")
-    for i, r in enumerate(rank_reports(result.reports), start=1):
+    lines.append("| # | Model | Params | Quality | Pass | Depth | Prefill tok/s "
+                 "| Decode tok/s | TTFT | Memory | Peak | Value |")
+    lines.append("|---|-------|-------:|--------:|-----:|------:|--------------:"
+                 "|-------------:|-----:|-------:|-----:|------:|")
+    for row in leaderboard_rows(result):
+        r = row.report
         if r.error:
             lines.append(
-                f"| {i} | {r.model.name} | {r.model.parameter_size or '–'} "
-                f"| error | – | – | – | – | – | – |"
+                f"| {row.rank} | {r.model.name} | {r.model.parameter_size or '–'} "
+                f"| error | – | – | – | – | – | – | – | – |"
             )
             continue
         passed = f"{r.tasks_passed}/{len(r.task_results)}" if r.task_results else "–"
         val = scores.get(r.model.name)
         val_str = f"{val:g}" if val is not None else "–"
         lines.append(
-            f"| {i} | {r.model.name} | {r.model.parameter_size or '–'} "
+            f"| {row.rank} | {r.model.name} | {r.model.parameter_size or '–'} "
             f"| {fmt_quality(r.quality_score)} | {passed} "
-            f"| {fmt_tps(r.speed.tokens_per_sec)} | {fmt_ttft(r.speed.ttft_s)} "
-            f"| {_memory_display(r)} | {_peak_display(r)} | {val_str} |"
+            f"| {_depth_cell(row)} | {_prefill_cell(row)} | {_decode_cell(row)} "
+            f"| {fmt_ttft(row.ttft_s)} | {_memory_display(r)} | {_peak_display(r)} "
+            f"| {val_str} |"
         )
     lines.append("")
     lines.append("_Memory = resident model size; Peak = peak process-RSS growth "
@@ -266,35 +360,40 @@ def to_html(result: BenchmarkResult, title: str = "homebench report") -> str:
     from .score import value_scores, value_verdict
 
     ranked = rank_reports(result.reports)
+    board_rows = leaderboard_rows(result)
     ok = [r for r in ranked if not r.error]
     max_q = max((r.quality_score or 0 for r in ok), default=100) or 100
-    max_tps = max((r.speed.tokens_per_sec for r in ok), default=1) or 1
+    max_tps = max((row.decode_tps for row in board_rows if not row.report.error),
+                  default=1) or 1
     when = datetime.fromtimestamp(result.started_at).strftime("%Y-%m-%d %H:%M:%S")
     env = env_summary(result.environment)
     scores = value_scores(result.reports)
     verdict = value_verdict(result.reports)
 
     rows = []
-    for i, r in enumerate(ranked, start=1):
+    for row in board_rows:
+        r = row.report
         name = _html.escape(r.model.name)
         params = _html.escape(r.model.parameter_size or "–")
         if r.error:
             rows.append(
-                f'<tr><td class="rank">{i}</td><td class="model">{name}</td>'
+                f'<tr><td class="rank">{row.rank}</td><td class="model">{name}</td>'
                 f'<td class="num">{params}</td>'
-                f'<td colspan="7" class="err">error: {_html.escape(r.error)}</td></tr>')
+                f'<td colspan="9" class="err">error: {_html.escape(r.error)}</td></tr>')
             continue
         passed = f"{r.tasks_passed}/{len(r.task_results)}" if r.task_results else "–"
         q = r.quality_score
         val = scores.get(r.model.name)
         val_str = f"{val:g}" if val is not None else "–"
         rows.append(
-            f'<tr><td class="rank">{i}</td><td class="model">{name}</td>'
+            f'<tr><td class="rank">{row.rank}</td><td class="model">{name}</td>'
             f'<td class="num">{params}</td>'
             f'<td>{_bar(q, max_q, "q", fmt_quality(q))}</td>'
             f'<td class="num">{passed}</td>'
-            f'<td>{_bar(r.speed.tokens_per_sec, max_tps, "s", fmt_tps(r.speed.tokens_per_sec))}</td>'
-            f'<td class="num">{fmt_ttft(r.speed.ttft_s)}</td>'
+            f'<td class="num">{_html.escape(_depth_cell(row))}</td>'
+            f'<td class="num">{_html.escape(_prefill_cell(row))}</td>'
+            f'<td>{_bar(row.decode_tps, max_tps, "s", _decode_cell(row))}</td>'
+            f'<td class="num">{fmt_ttft(row.ttft_s)}</td>'
             f'<td class="num">{_memory_display(r)}</td>'
             f'<td class="num">{_peak_display(r)}</td>'
             f'<td class="num"><strong>{val_str}</strong></td></tr>')
@@ -333,7 +432,8 @@ def to_html(result: BenchmarkResult, title: str = "homebench report") -> str:
 {verdict_html}
 <h2>Leaderboard</h2>
 <table><thead><tr><th class="num">#</th><th>Model</th><th class="num">Params</th>
-<th>Quality</th><th class="num">Pass</th><th>tok/s</th><th class="num">TTFT</th>
+<th>Quality</th><th class="num">Pass</th><th class="num">Depth</th>
+<th class="num">Prefill tok/s</th><th>Decode tok/s</th><th class="num">TTFT</th>
 <th class="num">Memory</th><th class="num">Peak</th><th class="num">Value</th></tr></thead>
 <tbody>{''.join(rows)}</tbody></table>
 <p class="sub">Memory = resident model size · Peak = peak process-RSS growth during the run (best-effort)</p>

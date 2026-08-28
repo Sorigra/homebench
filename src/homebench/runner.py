@@ -8,11 +8,11 @@ plain-CLI renderer can subscribe to the same events.
 
 from __future__ import annotations
 
-import statistics
 import time
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
 
+from .metrics.depth import measure_at_depths
 from .metrics.memory import RSSSampler
 from .models import (
     BenchmarkResult,
@@ -55,6 +55,9 @@ class RunConfig:
     seed: Optional[int] = 42
     speed_prompt: str = DEFAULT_SPEED_PROMPT
     repeat: int = 1                 # speed-probe repetitions (best is kept)
+    # Prompt depths, in tokens, the speed probe sweeps. [0] reproduces the
+    # single shallow measurement homebench took before the sweep existed.
+    depths: List[int] = field(default_factory=lambda: [0, 8192, 32768])
     warmup: bool = True
     unload_between: bool = True
     sample_rss: bool = True
@@ -81,6 +84,7 @@ class RunConfig:
             "temperature": self.temperature,
             "seed": self.seed,
             "repeat": self.repeat,
+            "depths": list(self.depths),
             "warmup": self.warmup,
             "unload_between": self.unload_between,
             "sample_rss": self.sample_rss,
@@ -191,7 +195,8 @@ class Runner:
 
             if cfg.run_speed:
                 _emit(observer, EV_PHASE, model=model.name, phase="speed")
-                report.speed, report.memory = self._measure_speed(model.name)
+                report.speed, report.memory, report.depth_results = \
+                    self._measure_speed(model.name, observer, report)
 
             if cfg.run_quality:
                 _emit(observer, EV_PHASE, model=model.name, phase="quality")
@@ -201,9 +206,15 @@ class Runner:
                 self.provider.unload(model.name)
                 unload_err = getattr(self.provider, "last_unload_error", None)
                 if unload_err:
-                    report.warnings.append(f"unload failed: {unload_err}")
+                    # Self-describing: ModelReport.warnings are read out of
+                    # context (leaderboard, saved JSON), so each note names
+                    # its own model rather than relying on a renderer to
+                    # prefix it -- that prefixing is what doubled the model
+                    # name in the live output before this fix.
+                    note = f"{model.name}: unload failed: {unload_err}"
+                    report.warnings.append(note)
                     _emit(observer, EV_PHASE, model=model.name,
-                          phase="warning", note=f"unload failed: {unload_err}")
+                          phase="warning", note=note)
         except ProviderError as exc:
             report.error = str(exc)
             _emit(observer, EV_PHASE, model=model.name, phase="error", note=str(exc))
@@ -215,32 +226,41 @@ class Runner:
         return report
 
     # ------------------------------------------------------------------
-    def _measure_speed(self, model: str):
-        cfg = self.config
-        runs: List[SpeedMetrics] = []
-        mem = MemoryMetrics()
-        for _ in range(max(1, cfg.repeat)):
-            gen = self.provider.generate(
-                model,
-                cfg.speed_prompt,
-                max_tokens=cfg.speed_max_tokens,
-                temperature=cfg.temperature,
-                seed=cfg.seed,
-                timeout=cfg.timeout,
-            )
-            runs.append(gen.speed)
+    def _measure_speed(self, model: str, observer: Observer = None,
+                       report: Optional[ModelReport] = None):
+        """Sweep the configured depths and return (speed, memory, points).
 
-        # Keep the best (highest tokens/sec) run as the representative sample;
-        # report median TTFT to smooth out first-call noise.
-        best = max(runs, key=lambda s: s.tokens_per_sec)
-        best.ttft_s = statistics.median(r.ttft_s for r in runs)
+        ``speed`` is the shallowest depth that was actually measured, which is
+        what ``score.py``, ``history`` and ``diff`` keep reading (PERF-15).
+        """
+        cfg = self.config
+
+        def _warn(note: str) -> None:
+            if report is not None:
+                report.warnings.append(note)
+            _emit(observer, EV_PHASE, model=model, phase="warning", note=note)
+
+        def _on_depth(depth: int) -> None:
+            _emit(observer, EV_PHASE, model=model, phase="speed", depth=depth)
+
+        sweep = measure_at_depths(self.provider, model, cfg.depths or [0],
+                                  cfg=cfg, warn=_warn, on_depth=_on_depth)
+
+        # Zero tokens in both content and reasoning_content is a failed
+        # generation, not a slow one: say so instead of leaving a silent
+        # 0.00 tok/s that looks like a real result (PERF-05).
+        for point in sweep.points:
+            if point.skipped is None and point.output_tokens == 0:
+                _warn(f"{model}: depth {point.depth_requested} generated no "
+                      f"tokens (content and reasoning both empty)")
 
         # Resident memory: the provider's view (RSS peak is sampled per-model in
         # _run_model, spanning the whole run).
+        mem = MemoryMetrics()
         pmem = self.provider.memory(model)
         mem.size_bytes = pmem.size_bytes
         mem.vram_bytes = pmem.vram_bytes
-        return best, mem
+        return sweep.speed or SpeedMetrics(), mem, sweep.points
 
     # ------------------------------------------------------------------
     def _run_quality(self, model: ModelInfo, observer: Observer) -> List[TaskResult]:

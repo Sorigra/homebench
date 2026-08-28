@@ -154,81 +154,63 @@ descarga individual.
 
 ## Handoff
 
-**Onde parou:** feature `model-lifecycle` **implementada, verificada, mesclada e lançada** em
-2026-08-28. `validation.md` → **PASS** (§ Iteration 3). `validate_state.py` → 0 erros.
+**Onde parou:** feature `perf-metrics` **implementada e validada** em 2026-08-28.
+`validation.md` → **PASS**; `validate_state.py` → 0 erros. Falta só o **teste de aceitação ao
+vivo** contra o router e a decisão de merge/release.
 
-**Estado do git:** mesclada na `main` (merge `--no-ff` `7200f94`), versão bumpada para
-**0.12.0** (`993c44c`), tag **`v0.12.0`**. `main` e a tag **enviadas para o fork**
-`Sorigra/homebench` (autorizado pelo usuário). Branch `feat/model-lifecycle` deletada
-(local; nunca foi pra remoto). Nada foi para o repo original. `git push` continua exigindo
-autorização explícita por operação.
+**Branch:** `feat/perf-metrics`, 20 commits à frente de `main` (`d530695`). **Nada enviado para
+remoto.** `git push` continua exigindo autorização explícita na hora.
 
-**Testes:** 162 (antes) → **373 passam, 5 pulados** (`tests/test_live_router.py`, só roda com
-`HOMEBENCH_LIVE=1`, nunca no CI). Python local 3.14; CI cobre 3.9–3.12.
+**Testes:** 378 → **454 coletados, 449 passam, 5 pulados** (`tests/test_live_router.py`, só com
+`HOMEBENCH_LIVE=1`, nunca no CI). Gate de build verde (`twine check` PASSOU nos dois artefatos).
 
-### O que foi entregue
+### O que a feature entrega
 
-Pacote `src/homebench/lifecycle/` (headless, AD-005): `models.py`, `router.py`
-(`LlamaRouterClient`), `params.py`, `manager.py` (`ModelLifecycleManager`). Integração:
-`providers/llamacpp.py` (`unload()` real + `router()` por host), `runner.py` (hook
-`prepare_model` por modelo + `ModelReport.warnings`), `cli.py` (fluxo de confirmação,
-subcomando `models`, `--force-unload`), `doctor.py` (checagens do router).
+1. `reasoning_content` conta no timing — o defeito que zerava o tok/s de modelo de raciocínio.
+2. Prefill e decode separados, vindos do `timings` server-side quando existe; `prefill_tps` fica
+   `None` (renderizado `–`) quando o backend não informa, nunca um zero falso.
+3. Varredura de profundidade `0/8192/32768` ligada por padrão, `--depths` para mudar; uma linha
+   de leaderboard por (modelo, profundidade) em Rich, Markdown, HTML, plainui e TUI.
+4. Compatibilidade preservada: `score.py`, `history.py` e `diff` não foram tocados e seguem lendo
+   `speed.tokens_per_sec`, que por contrato é a profundidade mais rasa medida.
 
-### Decisões desta fase
+### Validação
 
-AD-006 (itens adiados: MLC-15, aviso de requisição em voo, retry `--models-max`, heurística
-`-ngl` em produção, dedup cross-backend) · AD-007 (escopo da confirmação após o hook por modelo).
+Feita **inline pelo orquestrador**, não por Verifier subagente — decisão do usuário por
+orçamento. 17/17 ACs com evidência `file:line`. Sensor de discriminação: 6 mutações, 6 mortas,
+0 sobreviventes (uma sétima descartada como mutante equivalente, justificada no relatório).
+Ressalva registrada: a spec e a validação têm o mesmo autor, então erro de origem na spec teria
+menor chance de ser pego.
 
-### Teste ao vivo — EXECUTADO, 5/5 verde (2026-08-28)
+### Próximo passo — teste de aceitação ao vivo (não feito)
 
-`HOMEBENCH_LIVE=1 .venv/bin/python -m pytest -q tests/test_live_router.py` rodou contra os dois
-routers de produção-dev. **5/5 passa** em ~12 s; estado dos routers restaurado ("nada carregado"
-nos dois). Autorizado pelo usuário ("ambiente de produção de desenvolvimento").
+```bash
+export LLAMACPP_API_KEY="$(cat ~/llm-server/llama/api-key.txt)"
+.venv/bin/homebench run --provider llamacpp --host http://127.0.0.1:8080 \
+  --no-quality -m gemma4-e2b --force-unload --no-tui
+```
 
-Três fatos do ambiente que o teste passou a tratar (commit de melhoria):
-- Os caminhos `-m` do router são de dentro do container (`/models/...`); mapeados para o host
-  via `HOMEBENCH_LIVE_MODEL_DIR` (default `/home/ai-models`).
-- "Menor arquivo" pegava a cabeça draft Eagle3 de 849 MB do `gpt-oss-120b` e dava timeout;
-  agora é "menor arquivo ≥ 1,5 GB" ou `HOMEBENCH_LIVE_MODEL` fixo.
-- `POST /models/unload` no build `b10664` **descarrega de forma assíncrona** — retorna antes de
-  `GET /v1/models` parar de mostrar o modelo. O teste faz polling (30 s) em vez de checar na hora.
-  Isso vale para o produto: `ensure_only` se auto-corrige (replaneja e re-descarrega), mas vale
-  saber.
+Esperado, das medições feitas antes da implementação (prefill / decode tok/s):
+0 → 2714 / 95.1 · 8k → 2709 / 83.3 · 32k → 1805 / 73.0. E `-m Ornith-1.5-35B-A3B-Q8 --depths 0`
+deve dar ≈54 tok/s com TTFT ≈129 ms, onde antes dava `0.00`.
 
-**Builds convergiram:** os dois hosts agora reportam `b10664-e70802a01` (a divergência
-`b10615` vs `b10664` do plano está resolvida upstream). Isso remove um dos motivos do adiamento
-do MLC-15 — a comparação Vulkan vs ROCm agora é válida; falta só a superfície de CLI de dois
-hosts.
+**Atenção:** a varredura padrão é lenta num modelo de 35B (o prefill de 32k domina). Use
+`--depths 0` para o teste rápido.
 
-Confirmado ao vivo: `qwen35-4b` devolve `content: ""` com o texto em `reasoning_content`
-(MLC-16, fora de escopo) — o parser de stream do homebench não lê `reasoning_content`.
+### Depois disso
 
-### Próximos passos possíveis
+Merge em `main` + bump de versão para **0.13.0** em `pyproject.toml` **e**
+`src/homebench/__init__.py` (os dois, per `AGENTS.md`), tag `v0.13.0`. Nada disso feito ainda.
 
-1. ~~Rodar o teste ao vivo~~ — feito, 5/5 verde.
-2. ~~Mesclar + taguear~~ — feito, `v0.12.0` no fork.
-3. Próximas features do fork (planejar em outra sessão): **painel GPU AMD**, **perfis de
-   teste** (tamanhos de prompt/contexto), **fluxo guiado na TUI** — todas consomem
-   `lifecycle/` sem modificá-lo.
-4. `docs/USO.md` — guia de uso deste ambiente (criado nesta sessão).
-5. Se um dia quiser publicar no PyPI: `RELEASING.md` (upload é manual, precisa de token).
+### Regra nova desta sessão
+
+`AGENTS.md § Cost discipline` (commit `56641c8`): Sonnet é o default, processo dimensionado à
+mudança, máximo 3 subagentes incluindo Verifier, e **declarar o custo esperado antes de
+despachar**. O usuário estourou ~85% da assinatura nesta feature; custo é requisito.
 
 ### Autorizações e proibições permanentes
 
-- **Autorizado:** teste ao vivo contra `:8080`/`:8081`, modelos em `/home/ai-models`. Chave em
-  `~/llm-server/llama/api-key.txt` — **nunca logar nem commitar**.
 - **Proibido:** iniciar, parar ou reiniciar qualquer container (AD-001).
 - **Proibido sem autorização explícita na hora:** `git push` e qualquer operação remota.
-
-### Dívidas pré-existentes (não desta feature, em `design.md § Risks & Concerns`)
-
-Ordenação "3 menores" no-op no llamacpp (`size_bytes` sempre 0) · subcontagem de tokens com
-`reasoning_content` (`openai_compat.py`, diferido como MLC-16) · `_measure_speed` não captura
-`ProviderError` (comportamento hoje é o desejado para MLC-11, mas o nome sugere bug).
-
-### Plano de execução usado (histórico)
-
-Batch 1 (T1–T8, Sonnet) → Batch 2 (T9–T17, Opus) → Verifier iter 1 (Opus, FAIL) → correções
-Fix 1/4/6 (inline) → Verifier iter 2 (Opus, FAIL: 2 sobreviventes + narrowing) → correções
-G1/G2/G3 (inline) → Verifier iter 3 (inline, PASS). 4 subagentes no total (o 4º foi exceção
-autorizada pelo usuário para re-verificação).
+- Chave da API em `~/llm-server/llama/api-key.txt` — **nunca logar nem commitar**.
+- Estado do router ao fim desta sessão: **todos os 17 modelos `unloaded`**, como estava antes.

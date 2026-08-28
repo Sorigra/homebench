@@ -42,7 +42,8 @@ class FakeProvider(Provider):
         return "A short generated paragraph for the speed probe."
 
     def generate(self, model, prompt, *, max_tokens=256, temperature=0.0,
-                 seed=None, on_token: TokenCallback = None, timeout=300.0):
+                 seed=None, on_token: TokenCallback = None, timeout=300.0,
+                 cache_prompt=True):
         text = self._answer_for(prompt)
         if on_token:
             on_token(text)

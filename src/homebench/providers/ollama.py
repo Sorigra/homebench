@@ -73,6 +73,7 @@ class OllamaProvider(Provider):
         seed: Optional[int] = None,
         on_token: TokenCallback = None,
         timeout: float = 300.0,
+        cache_prompt: bool = True,   # accepted for parity; Ollama has no knob
     ) -> GenerationResult:
         options = {"num_predict": max_tokens, "temperature": temperature}
         if seed is not None:

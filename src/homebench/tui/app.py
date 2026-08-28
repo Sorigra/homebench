@@ -16,12 +16,14 @@ from textual import work
 
 from ..models import BenchmarkResult, ModelInfo, ModelReport
 from ..report import (
+    _decode_cell,
+    _depth_cell,
     _memory_display,
     _peak_display,
+    _prefill_cell,
     fmt_quality,
-    fmt_tps,
     fmt_ttft,
-    rank_reports,
+    leaderboard_rows,
 )
 from ..runner import (
     EV_MODEL_DONE,
@@ -76,8 +78,8 @@ class HomebenchApp(App):
 
     def on_mount(self) -> None:
         table = self.query_one("#board", DataTable)
-        table.add_columns("Model", "Status", "Quality", "Pass", "tok/s", "TTFT",
-                          "Memory", "Peak")
+        table.add_columns("Model", "Status", "Quality", "Pass", "Depth",
+                          "Prefill tok/s", "Decode tok/s", "TTFT", "Memory", "Peak")
         self._rebuild_table()
         self.run_benchmark()
 
@@ -121,23 +123,25 @@ class HomebenchApp(App):
         table.clear()
         done = [self.reports[n] for n in self.order if n in self.reports]
         pending = [n for n in self.order if n not in self.reports]
-        for r in rank_reports(done):
+        for row in leaderboard_rows(BenchmarkResult(reports=done)):
+            r = row.report
             if r.error:
                 table.add_row(r.model.name, "[red]error[/red]",
-                              "–", "–", "–", "–", "–", "–")
+                              "–", "–", "–", "–", "–", "–", "–", "–")
                 continue
             passed = f"{r.tasks_passed}/{len(r.task_results)}" if r.task_results else "–"
             table.add_row(
                 r.model.name, "[green]done[/green]",
                 fmt_quality(r.quality_score), passed,
-                fmt_tps(r.speed.tokens_per_sec), fmt_ttft(r.speed.ttft_s),
+                _depth_cell(row), _prefill_cell(row), _decode_cell(row),
+                fmt_ttft(row.ttft_s),
                 _memory_display(r), _peak_display(r),
             )
         for n in pending:
             label = self._status_label(n)
             style = "yellow" if label != "queued" else "dim"
             table.add_row(n, f"[{style}]{label}[/{style}]",
-                          "–", "–", "–", "–", "–", "–")
+                          "–", "–", "–", "–", "–", "–", "–", "–")
 
     def _set_status(self, model: str, phase: str, note: Optional[str]) -> None:
         widget = self.query_one("#status", Static)

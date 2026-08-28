@@ -24,6 +24,10 @@ class GenerationResult:
 
     text: str = ""
     speed: SpeedMetrics = field(default_factory=SpeedMetrics)
+    #: prompt tokens the server served from a reused KV cache
+    #: (llama.cpp's ``timings.cache_n``). Anything above 0 means the prefill
+    #: rate of this generation is not a cold measurement.
+    cache_hit_tokens: int = 0
 
 
 # Called with each text chunk as it streams in.
@@ -60,12 +64,28 @@ class Provider(ABC):
         seed: Optional[int] = None,
         on_token: TokenCallback = None,
         timeout: float = 300.0,
+        cache_prompt: bool = True,
     ) -> GenerationResult:
-        """Generate a completion, streaming tokens to ``on_token``."""
+        """Generate a completion, streaming tokens to ``on_token``.
+
+        ``cache_prompt=False`` asks the backend not to serve the prompt from a
+        reused KV cache. Measurement passes need it: without it a repeated
+        prompt reports a prefill rate that is really a cache read. Backends
+        with no such control ignore it.
+        """
 
     def memory(self, model: str) -> MemoryMetrics:  # pragma: no cover - optional
         """Memory footprint of the (loaded) model. Best-effort; may be empty."""
         return MemoryMetrics()
+
+    def tokenize(self, model: str, text: str) -> Optional[int]:
+        """Exact token count of ``text`` for ``model``, or ``None``.
+
+        ``None`` means "this backend cannot say" -- never a disguised estimate.
+        Callers that need a number fall back to their own approximation and
+        correct it afterwards from what the server reports having processed.
+        """
+        return None
 
     def warmup(self, model: str, *, timeout: float = 300.0) -> None:
         """Load a model into memory so later timings exclude load time."""

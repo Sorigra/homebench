@@ -110,7 +110,40 @@ descarregar por conta própria.
 
 ---
 
-## 5. Testar parâmetros de carga (`-ngl`, contexto, flash attention)
+## 5. Profundidade de contexto (`--depths`)
+
+Por padrão o `homebench` mede cada modelo em **três profundidades de contexto**: `0`, `8192` e
+`32768` tokens de prompt. Um modelo real perde velocidade conforme o contexto cresce — no
+`gemma4-e2b` medido ao vivo, o decode cai de ~95 para ~73 tok/s (23%) e o prefill de ~2 700 para
+~1 800 tok/s (33%) entre profundidade 0 e 32k. Medir só em contexto zero, como o `homebench`
+fazia antes desta feature, escondia essa degradação.
+
+O leaderboard agora mostra **uma linha por (modelo, profundidade)**, com colunas separadas de
+`Prefill tok/s` e `Decode tok/s` — não são o mesmo regime e ficam ordens de grandeza distantes
+(milhares vs dezenas), então uma coluna só de "tok/s" escondia qual dos dois estava sendo medido.
+
+**Isso custa tempo.** A varredura roda três medições por modelo em vez de uma; um prefill de 32k
+sozinho leva **~18 s** num modelo pequeno como o `gemma4-e2b`, e bem mais num modelo grande (o
+prefill de 32k de um 35B pode passar de um minuto). Para o benchmark rápido de sempre, sem a
+varredura:
+
+```bash
+.venv/bin/homebench run --provider llamacpp --host http://127.0.0.1:8080 --no-quality --depths 0
+```
+
+`--depths 0` reproduz exatamente o comportamento de antes desta feature: uma medição por modelo,
+em contexto ~zero. Também aceita uma lista customizada, na ordem dada:
+
+```bash
+.venv/bin/homebench run ... --depths 0,4096,16384
+```
+
+Um valor que excede a janela de contexto do modelo não derruba o run inteiro: aquela profundidade
+aparece pulada, com o motivo, e as demais seguem normalmente.
+
+---
+
+## 6. Testar parâmetros de carga (`-ngl`, contexto, flash attention)
 
 Crie `~/.homebench/load-params.json` com os flags extras por modelo:
 
@@ -141,7 +174,7 @@ salvo registra o argv efetivo. Use `--label` para marcar:
 
 ---
 
-## 6. Comparar Vulkan vs ROCm
+## 7. Comparar Vulkan vs ROCm
 
 Os dois backends rodam sobre a mesma GPU. Rode o mesmo modelo nos dois hosts e compare:
 
@@ -162,7 +195,7 @@ Os dois backends rodam sobre a mesma GPU. Rode o mesmo modelo nos dois hosts e c
 
 ---
 
-## 7. Histórico
+## 8. Histórico
 
 Todo run é salvo automaticamente em `~/.homebench/runs/`.
 
@@ -175,11 +208,14 @@ Todo run é salvo automaticamente em `~/.homebench/runs/`.
 
 ---
 
-## 8. Limitações conhecidas neste ambiente
+## 9. Limitações conhecidas neste ambiente
 
-- **Modelos de raciocínio (ex. `qwen35-4b`)** devolvem o texto em `reasoning_content`, que o
-  `homebench` ainda não lê — o tok/s desses modelos fica **subestimado**. É um defeito conhecido
-  e à parte (não do ciclo de vida).
+- **Corrigido:** modelos de raciocínio (ex. `qwen35-4b`) devolvem o texto em
+  `reasoning_content`. Antes desta feature o `homebench` não lia esse campo, e o tok/s não saía
+  "subestimado" — saía **zerado**: `Ornith-1.5-35B-A3B-Q8` reportava `0.00 tok/s` com TTFT de
+  129 ms, um resultado com cara de válido mas completamente falso. Um `reasoning_content` não
+  vazio agora conta para TTFT, tempo de decode e contagem de tokens, e o mesmo modelo mede
+  ≈54 tok/s reais.
 - **`POST /models/unload` é assíncrono** no build `b10664`: retorna antes de o modelo sumir de
   `GET /v1/models`. O `homebench` se auto-corrige (replaneja no próximo modelo), mas se você
   inspecionar na mão logo após, pode ver o modelo ainda `loaded` por alguns segundos.
@@ -188,7 +224,7 @@ Todo run é salvo automaticamente em `~/.homebench/runs/`.
 
 ---
 
-## 9. Teste ao vivo (para desenvolvimento)
+## 10. Teste ao vivo (para desenvolvimento)
 
 Há um teste de integração que roda o ciclo completo contra os dois routers reais. É **desligado
 por padrão** (nunca roda no CI):
