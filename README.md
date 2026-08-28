@@ -33,8 +33,10 @@ There are great tools for *one* half of this problem, but nothing local-first th
 
 | Metric | How |
 | --- | --- |
-| **tok/s** | Output tokens ÷ generation time. Ollama reports server-side eval timing; OpenAI-compatible backends are timed client-side from the token stream. Excludes prompt processing and model load. |
-| **TTFT** | Wall-clock time to the first streamed token (minus model-load time where the runner reports it). |
+| **Depth** | The context depth (in prompt tokens) that row was measured at. By default every model is swept at three depths — `0`, `8192`, `32768` — so the leaderboard shows one row per (model, depth); `--depths 0` reproduces the old single-measurement behavior. See [Context-depth sweep](#context-depth-sweep). |
+| **Prefill tok/s** | Prompt-processing rate at that depth. Read from the backend's own `timings` object when it reports one (llama.cpp); shown as `–` rather than a fake `0.00` when the backend doesn't expose it. Runs an order of magnitude faster than decode — don't expect them on the same scale. |
+| **Decode tok/s** | Output tokens ÷ generation time at that depth. Backend `timings` when available; otherwise timed client-side from the token stream — including tokens streamed as `reasoning_content` by reasoning models, which used to be silently dropped and made those models read as `0.00 tok/s`. Excludes prompt processing and model load. |
+| **TTFT** | Wall-clock time to the first streamed token, from either regular or reasoning output (minus model-load time where the runner reports it). |
 | **Memory** | Two numbers, labeled: **Memory** = resident model size the runner reports (Ollama `/api/ps`, LM Studio `/api/v0`); **Peak** = peak process-RSS *growth* of the backend, sampled across the whole run (load + speed + every quality task), not one call. Best-effort — on unified-memory Macs weights live in Metal, so Peak can read low. (Generations are single-turn, so Peak isn't a growing multi-turn-session watermark.) |
 | **Quality** | 31 deterministically-graded tasks across math, reasoning, factual recall, instruction-following/structured-output, extraction, and code understanding. Optional **LLM-as-judge** adds open-ended tasks (summaries, email, haiku, explanations). |
 | **Value** | A composite 0–100 score blending quality, tok/s, and memory (normalised *within your run*), so homebench can call the **🏆 best model for your laptop** — not just rank them. |
@@ -74,6 +76,8 @@ homebench --provider lmstudio    # use LM Studio instead of auto-detect
 homebench --provider llamacpp    # llama.cpp server (llama-server)
 homebench --provider vllm        # vLLM
 homebench --provider openai --host http://localhost:5000   # any OpenAI-compatible server
+homebench --depths 0,8192,32768  # context depths to sweep (default; see below)
+homebench --depths 0             # fast path: one measurement, no sweep
 homebench --refresh-cache        # recompute instead of reusing cached responses
 homebench --no-quality           # speed + memory only (fast)
 homebench --no-speed             # quality only
@@ -113,7 +117,24 @@ A real quick-suite run on an Apple M1 (16 GB), via Ollama:
 └───┴──────────────────────┴────────┴─────────┴──────┴───────┴────────┴────────┘
 ```
 
-(Numbers are for *that* laptop at *that* moment — see [Limitations](#limitations).)
+(Numbers are for *that* laptop at *that* moment — see [Limitations](#limitations). This capture
+predates the depth sweep; a default run today also reports a `Depth`, `Prefill tok/s`, and
+`Decode tok/s` column per row instead of a single `tok/s` — see below.)
+
+### Context-depth sweep
+
+Single-stream tok/s is normally measured on a near-empty prompt — the one context nobody actually
+works in. By default `homebench` now measures every model at three prompt depths (`0`, `8192`,
+`32768` tokens), so degradation under real context is visible instead of implied: a small model
+can lose ~25% decode and ~30% prefill speed by 32k tokens. The leaderboard gets one row per
+(model, depth); ranking and the `Value` score still use the shallowest depth, so they're
+comparable with runs from before this feature.
+
+This costs run time — three measurements per model instead of one, and a 32k-token prefill alone
+can take tens of seconds. Use `--depths 0` for the old, fast, single-measurement behavior, or pass
+a custom comma-separated list (e.g. `--depths 0,4096`) to sweep something else. A depth that
+exceeds a model's context window is skipped with the reason shown, and the rest of that model's
+sweep still runs.
 
 ## Providers
 

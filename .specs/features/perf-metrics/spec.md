@@ -171,15 +171,15 @@ já salvos em `~/.homebench/runs/`.
 | PERF-13 | P3: varredura de profundidade | T2, T6, T9 | Done |
 | PERF-14 | P3: varredura de profundidade | T9 | Done |
 | PERF-15 | P3: varredura de profundidade | T10 | Done |
-| PERF-16 | P3: compatibilidade e saídas | T1, T2, T17 | Pending |
-| PERF-17 | P3: compatibilidade e saídas | T12, T13, T14, T15, T17 | Pending |
+| PERF-16 | P3: compatibilidade e saídas | T1, T2, T17 | Done |
+| PERF-17 | P3: compatibilidade e saídas | T12, T13, T14, T15, T17 | Done |
 
 **Mapeamento AC → ID:** PERF-01..05 = P1 AC1..AC5 · PERF-06..09 = P2 AC1..AC4 (P2 AC5 dobra em
 PERF-09) · PERF-10..15 = P3-varredura AC1..AC8 (AC4 dobra em PERF-12, AC8 em PERF-15) ·
 PERF-16..17 = P3-compat AC1..AC4.
 
-**Coverage:** 17 total, 17 mapeados para tasks, 0 não mapeados ✅. Concluídos após as fases
-1-2: PERF-01..04, PERF-06..08 (7). Os demais dependem das fases 3-5.
+**Coverage:** 17 total, 17 mapeados para tasks, 0 não mapeados ✅. Todos os 17 concluídos após
+a fase 5 (T17).
 
 ---
 

@@ -463,7 +463,7 @@ T17
 
 ---
 
-### T17: Compatibilidade de histórico e documentação
+### T17: Compatibilidade de histórico e documentação ✅ Complete
 
 **What**: teste de regressão carregando um run real salvo antes da feature, mais a atualização de `docs/USO.md` e `README.md`.
 **Where**: `tests/test_history.py`, `docs/USO.md`, `README.md`
@@ -474,12 +474,13 @@ T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Um JSON de run pré-feature carrega, lista em `history` e compara em `diff`
-- [ ] `USO.md` §8 corrigido: `reasoning_content` **zerava** o tok/s, não "subestimava"
-- [ ] `USO.md` ganha a seção de `--depths` com o custo de tempo do padrão
-- [ ] README documenta as colunas novas
-- [ ] Gate check passes: `.venv/bin/python -m pytest -q && .venv/bin/python -m build && .venv/bin/twine check dist/*`
-- [ ] Test count: 451 + 3 = 454 testes passam, 5 pulados
+- [x] Um JSON de run pré-feature carrega, lista em `history` e compara em `diff`
+- [x] `USO.md` §8 corrigido: `reasoning_content` **zerava** o tok/s, não "subestimava"
+- [x] `USO.md` ganha a seção de `--depths` com o custo de tempo do padrão
+- [x] README documenta as colunas novas
+- [x] Gate check passes: `.venv/bin/python -m pytest -q && .venv/bin/python -m build && .venv/bin/twine check dist/*`
+- [x] Test count: 454 testes coletados (449 passam, 5 pulados) — a base real após T16
+      era 452, não 451 (ver nota em T16), então os 2 testes novos aqui fecham em 454
 
 **Tests**: unit
 **Gate**: build
