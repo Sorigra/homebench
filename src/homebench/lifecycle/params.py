@@ -10,7 +10,9 @@ from __future__ import annotations
 import json
 import os
 import warnings
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
+
+from .models import LoadParams, ModelState
 
 _OVERRIDE_FILENAME = "load-params.json"
 
@@ -75,3 +77,37 @@ def suggest_ngl(file_bytes: int, budget_bytes: int) -> int:
     if file_bytes >= budget_bytes:
         return 0
     return max(0, int(NGL_ALL * (budget_bytes / needed)))
+
+
+def resolve(
+    model: ModelState,
+    explicit: Optional[List[str]] = None,
+    overrides: Optional[Dict[str, List[str]]] = None,
+    hardware: Optional[Any] = None,
+    file_bytes: int = 0,
+) -> LoadParams:
+    """Resolve a model's load parameters by declared precedence (AD-003).
+
+    explicit flag > override JSON > server preset (``model.args``) >
+    ``-ngl`` heuristic > llama.cpp default. ``LoadParams.origin`` records which
+    source won, so two runs of the same model are distinguishable (MLC-09).
+
+    ``file_bytes`` is needed for the heuristic tier; the design's ``resolve``
+    sketch omits it because the heuristic was the last tier decided.
+    """
+    if explicit:
+        return LoadParams(extra_args=list(explicit), origin="explicit")
+
+    override_args = (overrides or {}).get(model.id)
+    if override_args:
+        return LoadParams(extra_args=list(override_args), origin="json")
+
+    if model.args:
+        return LoadParams(extra_args=list(model.args), origin="preset")
+
+    if hardware is not None and file_bytes > 0:
+        budget, _ = hardware.memory_budget()
+        ngl = suggest_ngl(file_bytes, budget)
+        return LoadParams(extra_args=["-ngl", str(ngl)], origin="heuristic")
+
+    return LoadParams(extra_args=[], origin="default")

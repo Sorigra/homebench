@@ -290,11 +290,15 @@ efetivo é `HardwareInfo.memory_budget()` nos testes.
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `resolve()` aplica flag explícita > override JSON > preset do servidor > heurística > default
-- [ ] `LoadParams.origin` registra qual fonte venceu
-- [ ] Cada um dos cinco níveis tem teste isolado que prova que ele vence o nível abaixo
-- [ ] Gate: `.venv/bin/python -m pytest -q`
-- [ ] Total ≥ 162 + 50 testes passam
+- [x] `resolve()` aplica flag explícita > override JSON > preset do servidor > heurística > default
+- [x] `LoadParams.origin` registra qual fonte venceu
+- [x] Cada um dos cinco níveis tem teste isolado que prova que ele vence o nível abaixo
+- [x] Gate: `.venv/bin/python -m pytest -q`
+- [x] Total ≥ 162 + 50 testes passam — 232 passam
+
+**Nota:** `resolve()` recebe um kwarg extra `file_bytes: int = 0` (não previsto no sketch do
+design) porque a heurística de `-ngl` precisa do tamanho do arquivo. Sem `hardware` **e**
+`file_bytes`, a heurística é pulada e cai no default.
 
 **Tests**: unit
 **Gate**: quick

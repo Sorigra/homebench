@@ -14,6 +14,7 @@ from homebench.lifecycle.params import (
     NGL_ALL,
     default_home,
     load_overrides,
+    resolve,
     suggest_ngl,
 )
 
@@ -103,3 +104,70 @@ def test_result_is_always_non_negative_int():
     for fb, bg in [(0, 0), (1, 1), (5 * GB, 3 * GB), (3 * GB, 5 * GB)]:
         r = suggest_ngl(fb, bg)
         assert isinstance(r, int) and r >= 0
+
+
+# =====================================================================
+# T8: resolve() precedence
+# =====================================================================
+_HW = HardwareInfo(os="Linux", ram_total_bytes=64 * GB,
+                   gpu=GPUInfo(name="RTX 4090", vram_bytes=24 * GB, kind="nvidia"))
+
+
+def _state(model_id="qwen35-4b", args=None):
+    return ModelState(id=model_id, status="unloaded", args=args or [])
+
+
+def test_explicit_flag_beats_json_override():
+    lp = resolve(
+        _state(args=["-ngl", "5"]),
+        explicit=["-ngl", "42"],
+        overrides={"qwen35-4b": ["-ngl", "20"]},
+    )
+    assert lp.extra_args == ["-ngl", "42"]
+    assert lp.origin == "explicit"
+
+
+def test_json_override_beats_server_preset():
+    lp = resolve(
+        _state(args=["-ngl", "5", "-fa"]),
+        overrides={"qwen35-4b": ["-ngl", "20"]},
+    )
+    assert lp.extra_args == ["-ngl", "20"]
+    assert lp.origin == "json"
+
+
+def test_server_preset_beats_heuristic():
+    lp = resolve(
+        _state(args=["-ngl", "5"]),
+        hardware=_HW,
+        file_bytes=3 * GB,
+    )
+    assert lp.extra_args == ["-ngl", "5"]
+    assert lp.origin == "preset"
+
+
+def test_heuristic_beats_default():
+    lp = resolve(_state(args=[]), hardware=_HW, file_bytes=3 * GB)
+    assert lp.origin == "heuristic"
+    assert "-ngl" in lp.extra_args
+
+
+def test_default_when_nothing_supplied():
+    lp = resolve(_state(args=[]))
+    assert lp.extra_args == []
+    assert lp.origin == "default"
+
+
+def test_empty_explicit_list_falls_through():
+    lp = resolve(_state(args=["-ngl", "5"]), explicit=[])
+    assert lp.origin == "preset"
+
+
+def test_empty_override_for_model_falls_through():
+    lp = resolve(_state(args=["-ngl", "5"]), overrides={"qwen35-4b": []})
+    assert lp.origin == "preset"
+
+
+def test_heuristic_needs_both_hardware_and_file_bytes():
+    assert resolve(_state(args=[]), hardware=_HW).origin == "default"
+    assert resolve(_state(args=[]), file_bytes=3 * GB).origin == "default"
