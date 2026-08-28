@@ -225,7 +225,12 @@ parâmetro — não exige mecanismo novo.
 - IF o arquivo de override JSON estiver malformado THEN o sistema SHALL avisar e seguir com a
   precedência restante, em vez de abortar o run.
 - WHEN o mesmo modelo existir nos dois backends com ids diferentes THEN o sistema SHALL tratá-los
-  como entradas independentes, sem deduplicar.
+  como entradas independentes, sem deduplicar. *(N/A por construção — AD-006: um `LlamaRouterClient`
+  por host, um provider por run.)*
+
+**Adiados após a verificação (AD-006):** o aviso de "requisição em voo" antes de descarregar (o
+build do router não expõe requisições ativas) e o retry ao atingir `--models-max` durante a carga
+(o `plan()` já descarrega todos os outros antes, então o limite nunca é atingido pela ferramenta).
 
 ---
 
@@ -246,13 +251,25 @@ parâmetro — não exige mecanismo novo.
 | MLC-11 | Edge: router reinicia | Design | Pending |
 | MLC-12 | P2: Inspeção | Design | Pending |
 | MLC-13 | P2: Parâmetros | Design | Pending |
-| MLC-14 | P1: `unload()` real | Design | Pending |
-| MLC-15 | P3: Comparar backends | - | Pending |
+| MLC-14 | P1: `unload()` real | Execute | ✅ Verificado |
+| MLC-15 | P3: Comparar backends | - | Deferred (AD-006) |
 | MLC-16 | Fora de escopo: `reasoning_content` | - | Deferred |
 
 **ID format:** `MLC-[NUMBER]`
 
-**Coverage:** 15 ativos, 0 mapeados para tasks ainda, 1 diferido explicitamente.
+**Coverage:** 14 ativos e verificados, 2 diferidos explicitamente (MLC-15 por AD-006, MLC-16 desde o início).
+
+**Status por requisito após a verificação (`validation.md` + AD-006):**
+
+| Requisito | Status |
+| --- | --- |
+| MLC-01, MLC-03, MLC-09 | ✅ Verificado — a garantia roda por modelo via o `prepare_model` hook do `Runner` (Fix 1) |
+| MLC-02, MLC-04, MLC-05, MLC-07, MLC-08, MLC-10, MLC-12 | ✅ Verificado |
+| MLC-06 | ✅ Verificado (timeout de carga + load POST que falha não deixa nada carregado) |
+| MLC-11 | ✅ Verificado (Fix 4 — teste de isolamento de falha no meio do run) |
+| MLC-13 | ✅ Verificado, exceto o nível heurístico de `-ngl`, inalcançável no ambiente atual (adiado, AD-006) |
+| MLC-14 | ✅ Verificado; a falha de unload agora chega ao `ModelReport.warnings` (Fix 6) |
+| MLC-15 | ⏸️ Adiado (AD-006) — builds divergentes invalidam a comparação hoje |
 
 ---
 

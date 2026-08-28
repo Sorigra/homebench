@@ -68,7 +68,7 @@ class PlainReporter:
             return Text(f"quality {done}/{self.total_tasks}", style="yellow")
         colors = {
             "done": "green", "error": "red", "queued": "dim",
-            "warmup": "cyan", "speed": "cyan", "starting": "cyan",
+            "warmup": "cyan", "speed": "cyan", "starting": "cyan", "prepare": "cyan",
         }
         return Text(s, style=colors.get(s, "yellow"))
 

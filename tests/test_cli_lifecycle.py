@@ -120,47 +120,70 @@ def test_non_interactive_without_the_flag_refuses_and_explains(monkeypatch):
 
 
 # =====================================================================
-# _prepare_router_models
+# _prepare_router_models -> (proceed, prepare_hook)
 # =====================================================================
 def _router_provider(*states):
     return FakeRouterProvider(FakeRouter(list(states), allow_mutations=True))
 
 
+def _mi(name):
+    return ModelInfo(name, "llamacpp")
+
+
 def test_non_router_provider_is_left_alone():
-    proceed, params = cli._prepare_router_models(
+    proceed, hook = cli._prepare_router_models(
         PlainProvider(), [ModelInfo("m", "ollama")], _args(argv=[]), _console())
     assert proceed is True
-    assert params is None
+    assert hook is None
 
 
-def test_refusal_unloads_nothing_and_stops_the_run(monkeypatch):
+def test_no_confirmation_when_nothing_foreign_is_resident(monkeypatch):
+    # only the models this run measures are resident -> nothing to approve
+    monkeypatch.setattr("builtins.input", lambda *a: pytest.fail("must not ask"))
+    monkeypatch.setattr(cli.sys, "stdin", _Stdin(True))
+    provider = _router_provider(_state("target", "loaded"))
+
+    proceed, hook = cli._prepare_router_models(
+        provider, [_mi("target")], _args(argv=[]), _console())
+
+    assert proceed is True and callable(hook)
+
+
+def test_refusal_of_a_foreign_resident_unloads_nothing_and_stops_the_run(monkeypatch):
     monkeypatch.setattr("builtins.input", lambda *a: "n")
     monkeypatch.setattr(cli.sys, "stdin", _Stdin(True))
     provider = _router_provider(_state("target", "unloaded"),
                                 _state("resident", "loaded"))
     console = _console()
 
-    proceed, params = cli._prepare_router_models(
-        provider, [ModelInfo("target", "llamacpp")], _args(argv=[]), console)
+    proceed, hook = cli._prepare_router_models(
+        provider, [_mi("target")], _args(argv=[]), console)
 
-    assert proceed is False and params is None
-    assert "unload" not in [c[0] for c in provider._client.calls]
-    assert "load" not in [c[0] for c in provider._client.calls]
+    assert proceed is False and hook is None
+    assert [c[0] for c in provider._client.calls] == ["list_models"]
     assert "aborted" in _out(console)
 
 
-def test_approval_unloads_the_others_and_returns_effective_args(monkeypatch):
+def test_hook_makes_each_model_the_sole_resident_and_reports_its_args(monkeypatch):
     monkeypatch.setattr(cli.sys, "stdin", _Stdin(False))
-    provider = _router_provider(_state("target", "unloaded"),
-                                _state("resident", "loaded"))
+    provider = _router_provider(_state("m1", "unloaded"), _state("m2", "unloaded"),
+                                _state("m3", "unloaded"), _state("resident", "loaded"))
 
-    proceed, params = cli._prepare_router_models(
-        provider, [ModelInfo("target", "llamacpp")],
+    proceed, hook = cli._prepare_router_models(
+        provider, [_mi("m1"), _mi("m2"), _mi("m3")],
         _args(argv=["--force-unload"]), _console())
-
     assert proceed is True
-    assert [c[1] for c in provider._client.calls if c[0] == "unload"] == ["resident"]
-    assert params["target"] == ["/app/llama-server", "-m", "/models/target.gguf"]
+
+    # the Runner calls the hook once per model, in turn
+    seen_args = {m: hook(_mi(m)) for m in ("m1", "m2", "m3")}
+
+    client = provider._client
+    loaded = [c[1] for c in client.calls if c[0] == "load"]
+    assert loaded == ["m1", "m2", "m3"]                 # every model, not just the first
+    assert "resident" in [c[1] for c in client.calls if c[0] == "unload"]
+    # only the last model stays resident
+    assert [s.id for s in client._states if s.status == "loaded"] == ["m3"]
+    assert seen_args["m2"] == ["/app/llama-server", "-m", "/models/m2.gguf"]
 
 
 def test_server_resolved_preset_is_not_echoed_back_as_extra_args(monkeypatch):
@@ -168,8 +191,9 @@ def test_server_resolved_preset_is_not_echoed_back_as_extra_args(monkeypatch):
     monkeypatch.setattr(cli.sys, "stdin", _Stdin(False))
     provider = _router_provider(_state("target", "unloaded", ["-ngl", "99"]))
 
-    cli._prepare_router_models(provider, [ModelInfo("target", "llamacpp")],
-                               _args(argv=["--force-unload"]), _console())
+    _, hook = cli._prepare_router_models(provider, [_mi("target")],
+                                         _args(argv=["--force-unload"]), _console())
+    hook(_mi("target"))
 
     load = next(c for c in provider._client.calls if c[0] == "load")
     assert load[2] == []
@@ -181,26 +205,49 @@ def test_json_override_is_sent_as_extra_args(monkeypatch, tmp_path):
     monkeypatch.setattr(cli.sys, "stdin", _Stdin(False))
     provider = _router_provider(_state("target", "unloaded", ["-ngl", "99"]))
 
-    cli._prepare_router_models(provider, [ModelInfo("target", "llamacpp")],
-                               _args(argv=["--force-unload"]), _console())
+    _, hook = cli._prepare_router_models(provider, [_mi("target")],
+                                         _args(argv=["--force-unload"]), _console())
+    hook(_mi("target"))
 
     load = next(c for c in provider._client.calls if c[0] == "load")
     assert load[2] == ["-ngl", "20"]
 
 
 # =====================================================================
-# cmd_run honours the refusal
+# cmd_run honours the refusal / wires the hook into the runner
 # =====================================================================
 def test_cmd_run_returns_nonzero_and_never_benchmarks_on_refusal(monkeypatch):
     provider = _router_provider(_state("target", "unloaded"),
                                 _state("resident", "loaded"))
     monkeypatch.setattr(cli, "_resolve_provider", lambda args, console: provider)
     monkeypatch.setattr(cli, "_select_models",
-                        lambda p, a, c: [ModelInfo("target", "llamacpp")])
+                        lambda p, a, c: [_mi("target")])
     monkeypatch.setattr(cli, "_build_runner",
                         lambda *a, **kw: pytest.fail("no runner may be built"))
     monkeypatch.setattr(cli.sys, "stdin", _Stdin(True))
     monkeypatch.setattr("builtins.input", lambda *a: "n")
 
     assert cli.cmd_run(_args(argv=[]), _console()) == 1
-    assert [c[0] for c in provider._client.calls] == ["list_models", "list_models"]
+    assert [c[0] for c in provider._client.calls] == ["list_models"]
+
+
+class _Stop(Exception):
+    pass
+
+
+def test_cmd_run_hands_the_prepare_hook_to_the_runner(monkeypatch):
+    provider = _router_provider(_state("target", "unloaded"))
+    captured = {}
+
+    def fake_build(prov, args, prepare_hook=None):
+        captured["hook"] = prepare_hook
+        raise _Stop
+
+    monkeypatch.setattr(cli, "_resolve_provider", lambda args, console: provider)
+    monkeypatch.setattr(cli, "_select_models", lambda p, a, c: [_mi("target")])
+    monkeypatch.setattr(cli, "_build_runner", fake_build)
+    monkeypatch.setattr(cli.sys, "stdin", _Stdin(False))
+
+    with pytest.raises(_Stop):
+        cli.cmd_run(_args(argv=["--force-unload"]), _console())
+    assert callable(captured["hook"])

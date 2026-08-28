@@ -689,3 +689,58 @@ fase de destino, e todas constam do mapa de execução completo.
 | T17 | Validação ao vivo | integration | integration | ✅ OK |
 
 Nenhum `Tests: none`. Nenhuma violação.
+
+---
+
+## Fix Tasks — iteração 1 (pós-verificação)
+
+O Verifier independente reprovou a entrega (`validation.md`, veredito FAIL: M16 sobreviveu, 4
+edge cases sem evidência). O usuário escolheu corrigir o bloqueador + as duas lacunas de teste e
+adiar o resto (AD-006).
+
+### F1 — `ensure_only` roda por modelo, não só no primeiro ✅
+
+**What**: hook `prepare_model` no `Runner`, chamado no início do turno de cada modelo; a garantia
+"só o alvo residente" (MLC-01/MLC-03) e o registro de `load_params` (MLC-09) passam a valer para
+todos os modelos de um run com vários.
+**Where**: `src/homebench/runner.py`, `src/homebench/cli.py`, `src/homebench/plainui.py`
+**Requirement**: MLC-01, MLC-03, MLC-09
+**Done when**:
+- [x] `Runner(prepare_model=...)`; chamado 1×/modelo antes do warmup, emite `phase="prepare"`
+- [x] `_prepare_router_models` devolve `(proceed, prepare_hook)`; confirma só os residentes que
+      o run **não** vai medir (AD-002), depois cicla os modelos do run livremente
+- [x] `load_params` no resultado salvo tem uma entrada por modelo, não só a do primeiro
+- [x] Mutação M16 (`models[0]` → `models[-1]`) fica sem alvo — o loop cobre todos
+- [x] `tests/test_runner_prepare_hook.py` (8) + `tests/test_cli_lifecycle.py` reescrito
+- [x] Gate: `.venv/bin/python -m pytest -q` — 366 passam
+**Commit**: `fix(runner): prepare each measured model, not just the first`
+
+### F4 — teste de isolamento de falha no meio do run ✅
+
+**What**: prova que um `ProviderError` no meio do run (router reiniciando) falha só o modelo
+corrente; os demais seguem.
+**Where**: `tests/test_runner_error_isolation.py`, `tests/test_lifecycle_manager.py`
+**Requirement**: MLC-11, MLC-06
+**Done when**:
+- [x] Provider que levanta `ProviderError` para 1 de 3 modelos ⇒ `reports[i].error` setado, os
+      outros dois medem normalmente, run completa
+- [x] `load()` POST que falha não deixa nada carregado e não dispara unload espúrio
+- [x] Gate: 370 passam
+**Commit**: `test(runner): cover mid-run ProviderError isolation (MLC-11)`
+
+### F6 — falha de unload chega ao relatório ✅
+
+**What**: `ModelReport.warnings` recebe a falha de unload best-effort; mostrada depois do
+leaderboard e emitida como `phase="warning"`.
+**Where**: `src/homebench/models.py`, `src/homebench/runner.py`, `src/homebench/plainui.py`
+**Requirement**: MLC-14
+**Done when**:
+- [x] `ModelReport.warnings: List[str]`, em `to_dict`/`from_dict`, tolerante a runs antigos
+- [x] `tests/test_runner_unload_warning.py` (7)
+- [x] Gate: 356 passam
+**Commit**: `fix(runner): surface best-effort unload failures on the model report`
+
+### Adiado (AD-006) — não implementado nesta feature
+
+MLC-15 (comparar backends), aviso de requisição em voo, retry de `--models-max`, heurística de
+`-ngl` no caminho de produção, teste de não-dedup cross-backend. Motivos em STATE.md § AD-006.

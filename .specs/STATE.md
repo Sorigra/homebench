@@ -97,6 +97,34 @@ Verificável por teste de import — vale para as features seguintes (painel GPU
 
 ---
 
+### AD-006 — Itens adiados após a verificação da feature
+
+**Data:** 2026-08-28 · **Status:** Aceita (escolhido pelo usuário)
+
+O Verifier independente reprovou a primeira entrega (`validation.md`) e listou 7 correções. O
+usuário optou por corrigir o bloqueador e as duas lacunas de teste, e **adiar formalmente** o
+resto. Corrigido nesta iteração:
+
+- **Fix 1 (bloqueador)** — a garantia "só o alvo está carregado" agora roda por modelo, dentro
+  do `Runner`, via um `prepare_model` hook. Antes só valia para o primeiro modelo de um run
+  com vários. `load_params` também passa a ser gravado por modelo.
+- **Fix 4** — teste novo provando que um `ProviderError` no meio do run (router reiniciando)
+  falha só o modelo corrente (MLC-11).
+- **Fix 6** — falha de `unload` best-effort agora vai para `ModelReport.warnings` (persistida e
+  mostrada depois do leaderboard) além de emitir evento `phase="warning"`.
+
+Adiado, com motivo:
+
+| Item | Requisito | Por que adiar |
+| --- | --- | --- |
+| Comparação Vulkan vs ROCm de dois hosts | MLC-15 (P3) | Nunca foi MVP. Os dois hosts rodam builds diferentes (`b10615` vs `b10664`), então a comparação mistura backend com versão e é inválida hoje. Reabrir quando os builds convergirem. |
+| Aviso de "requisição em voo" antes de descarregar | Edge case / risco 2 do plano | O build `b10615` do router **não expõe** contagem de requisições ativas em nenhum endpoint verificado (`/props`, `/v1/models`, `/models/sse`). A confirmação obrigatória (AD-002) já cobre o risco de fundo. Reabrir se um build futuro adicionar `/slots` ao router. |
+| `--models-max` atingido durante carga ⇒ liberar o mais antigo e repetir | Edge case | O `plan()` já descarrega **todos** os outros residentes antes de carregar (MLC-03), então o limite nunca é atingido no caminho da ferramenta. Moot por construção. |
+| Heurística de `-ngl` no caminho de produção | MLC-13 P2 AC5 | O router sempre preenche `status.args` (tem preset para tudo em `/home/ai-models`), então `resolve()` sempre cai em `preset` e a heurística nunca dispara. O código e os testes de `suggest_ngl` ficam para quando existir um modelo sem preset. |
+| Mesmo modelo nos dois backends sem deduplicar | Edge case | N/A por construção: cada `LlamaRouterClient` fala com um host só e o run usa um provider por vez. E o edge case pede "ids diferentes" — não há o que deduplicar. |
+
+---
+
 ## Handoff
 
 **Onde parou:** Specify, Design e Tasks **concluídos e aprovados pelo usuário** em 2026-08-28.

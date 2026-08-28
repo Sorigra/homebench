@@ -115,10 +115,19 @@ class Runner:
         provider: Provider,
         config: Optional[RunConfig] = None,
         judge: Optional[LLMJudge] = None,
+        prepare_model: Optional[Callable[[ModelInfo], Optional[List[str]]]] = None,
     ):
         self.provider = provider
         self.config = config or RunConfig()
         self.judge = judge
+        # Called once per model, at the start of that model's run, before
+        # warmup. Used to make the target the only resident model on a
+        # llama.cpp router (MLC-01/MLC-03) and to return the argv it actually
+        # loaded with (MLC-09). None on every non-router path. A ProviderError
+        # raised here fails only the current model, like any other per-model
+        # failure (MLC-11).
+        self.prepare_model = prepare_model
+        self._prepared_params: Dict[str, List[str]] = {}
         self.cache = None
         if self.config.use_cache:
             from .cache import ResponseCache
@@ -131,12 +140,17 @@ class Runner:
             config=self.config.to_dict(),
             environment=self._capture_environment(),
         )
+        self._prepared_params = {}
         _emit(observer, EV_RUN_START, models=[m.name for m in models])
         for model in models:
             _emit(observer, EV_MODEL_START, model=model.name)
             report = self._run_model(model, observer)
             result.reports.append(report)
             _emit(observer, EV_MODEL_DONE, report=report)
+        if self._prepared_params:
+            merged = dict(result.config.get("load_params") or {})
+            merged.update(self._prepared_params)
+            result.config["load_params"] = merged
         if self.cache is not None:
             self.cache.save()
         result.finished_at = time.time()
@@ -165,6 +179,12 @@ class Runner:
         if sampler is not None:
             sampler.__enter__()
         try:
+            if self.prepare_model is not None:
+                _emit(observer, EV_PHASE, model=model.name, phase="prepare")
+                effective = self.prepare_model(model)
+                if effective is not None:
+                    self._prepared_params[model.name] = list(effective)
+
             if cfg.warmup:
                 _emit(observer, EV_PHASE, model=model.name, phase="warmup")
                 self.provider.warmup(model.name, timeout=cfg.timeout)

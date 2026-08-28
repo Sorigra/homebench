@@ -308,11 +308,15 @@ def _make_confirmer(args, console: Console):
 
 
 def _prepare_router_models(provider, models, args, console: Console):
-    """Leave only the first model to be measured resident on a router host.
+    """Prepare a llama.cpp router so each measured model runs as the sole resident.
 
-    Returns ``(proceed, load_params)``. ``proceed`` is False when the user
-    declined, in which case nothing was unloaded and no benchmark may run.
-    Providers whose host is not a llama.cpp router are left alone.
+    Returns ``(proceed, prepare_hook)``. ``proceed`` is False when the user
+    declined to unload a model that is not part of this run, in which case
+    nothing was unloaded and no benchmark may run. ``prepare_hook``, when not
+    None, is handed to the Runner and called once per model at the start of
+    that model's turn: it unloads every other resident (MLC-03), loads the
+    target if needed, and returns the argv it actually loaded with (MLC-09).
+    Providers whose host is not a llama.cpp router get ``(True, None)``.
     """
     get_router = getattr(provider, "router", None)
     client = get_router() if callable(get_router) else None
@@ -320,25 +324,41 @@ def _prepare_router_models(provider, models, args, console: Console):
         return True, None
 
     from .lifecycle.manager import ModelLifecycleManager
-    from .lifecycle.models import LoadParams
+    from .lifecycle.models import LifecyclePlan, LoadParams
     from .lifecycle.params import load_overrides, resolve
 
-    target = models[0].name
-    state = next((m for m in client.list_models() if m.id == target), None)
-    params = resolve(state, overrides=load_overrides()) if state else LoadParams()
-    if params.origin not in _SENDABLE_ORIGINS:
-        params = LoadParams(extra_args=[], origin=params.origin)
+    our_names = {m.name for m in models}
+    # Models resident now that this run will not measure. Unloading one could
+    # cut off a third party using Open WebUI, so it needs explicit confirmation
+    # up front (AD-002). Models this run does measure are cycled freely as their
+    # turn comes -- they belong to the benchmark.
+    foreign = [m.id for m in client.list_models()
+               if m.status == "loaded" and m.id not in our_names]
+    if foreign:
+        plan = LifecyclePlan(target="(run)", to_unload=foreign,
+                             reason="models not part of this run are resident")
+        if not _make_confirmer(args, console)(plan):
+            console.print("[yellow]aborted:[/yellow] nothing was unloaded and no "
+                          "benchmark was run.")
+            return False, None
 
+    overrides = load_overrides()
     manager = ModelLifecycleManager(client)
-    outcome = manager.ensure_only(target, params, _make_confirmer(args, console))
-    if outcome.aborted:
-        console.print("[yellow]aborted:[/yellow] nothing was unloaded and no "
-                      "benchmark was run.")
-        return False, None
-    return True, {target: outcome.effective_args}
+
+    def prepare(model):
+        state = next((m for m in client.list_models() if m.id == model.name), None)
+        params = resolve(state, overrides=overrides) if state else LoadParams()
+        if params.origin not in _SENDABLE_ORIGINS:
+            params = LoadParams(extra_args=[], origin=params.origin)
+        # Everything still resident here is either an already-approved foreign
+        # model or one this run loaded itself, so the plan is pre-authorised.
+        outcome = manager.ensure_only(model.name, params, lambda _plan: True)
+        return outcome.effective_args
+
+    return True, prepare
 
 
-def _build_runner(provider, args, load_params=None) -> Runner:
+def _build_runner(provider, args, prepare_hook=None) -> Runner:
     judge = None
     include_open = False
     if getattr(args, "judge", None):
@@ -364,9 +384,8 @@ def _build_runner(provider, args, load_params=None) -> Runner:
         quick=not getattr(args, "full", False),
         use_cache=not getattr(args, "no_cache", False),
         refresh_cache=getattr(args, "refresh_cache", False),
-        load_params=load_params,
     )
-    return Runner(provider, config, judge=judge)
+    return Runner(provider, config, judge=judge, prepare_model=prepare_hook)
 
 
 def _export(result, args, console: Console) -> None:
@@ -731,10 +750,10 @@ def cmd_run(args, console: Console) -> int:
     try:
         provider = _resolve_provider(args, console)
         models = _select_models(provider, args, console)
-        proceed, load_params = _prepare_router_models(provider, models, args, console)
+        proceed, prepare_hook = _prepare_router_models(provider, models, args, console)
         if not proceed:
             return 1
-        runner = _build_runner(provider, args, load_params=load_params)
+        runner = _build_runner(provider, args, prepare_hook=prepare_hook)
     except ProviderError as exc:
         console.print(f"[red]error:[/red] {exc}")
         return 1
