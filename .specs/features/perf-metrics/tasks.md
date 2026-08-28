@@ -322,7 +322,7 @@ T17
 
 ---
 
-### T11: Aviso de geração vazia
+### T11: Aviso de geração vazia ✅ Complete
 
 **What**: quando uma geração termina sem nenhum token em `content` e em `reasoning_content`, registrar aviso em `ModelReport.warnings`.
 **Where**: `src/homebench/runner.py`
@@ -333,11 +333,11 @@ T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Geração sem token nenhum produz aviso identificando modelo e profundidade
-- [ ] O aviso persiste no JSON salvo e reaparece depois do leaderboard
-- [ ] Geração só com `reasoning_content` **não** dispara o aviso
-- [ ] Gate check passes: `.venv/bin/python -m pytest -q tests/test_runner_unload_warning.py tests/test_runner_report.py`
-- [ ] Test count: 428 + 3 = 431 testes passam
+- [x] Geração sem token nenhum produz aviso identificando modelo e profundidade
+- [x] O aviso persiste no JSON salvo e reaparece depois do leaderboard
+- [x] Geração só com `reasoning_content` **não** dispara o aviso
+- [x] Gate check passes: `.venv/bin/python -m pytest -q tests/test_runner_unload_warning.py tests/test_runner_report.py`
+- [x] Test count: 428 + 3 = 431 testes passam
 
 **Tests**: unit
 **Gate**: quick

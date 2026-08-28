@@ -160,7 +160,7 @@ já salvos em `~/.homebench/runs/`.
 | PERF-02 | P1: tok/s de raciocínio | T4 | Done |
 | PERF-03 | P1: tok/s de raciocínio | T1, T4 | Done |
 | PERF-04 | P1: tok/s de raciocínio | T4 | Done |
-| PERF-05 | P1: tok/s de raciocínio | T11 | Pending |
+| PERF-05 | P1: tok/s de raciocínio | T11 | Done |
 | PERF-06 | P2: prefill vs decode | T5 | Done |
 | PERF-07 | P2: prefill vs decode | T5 | Done |
 | PERF-08 | P2: prefill vs decode | T5 | Done |
