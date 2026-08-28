@@ -275,6 +275,20 @@ def test_ensure_only_propagates_a_failed_load():
     assert "bad flag -zzz" in str(exc.value)
 
 
+def test_a_load_post_that_fails_leaves_nothing_loaded_and_needs_no_cleanup():
+    # the load POST itself was rejected, so nothing was loaded -- there is no
+    # partial state to unload, and the module must not issue a spurious unload
+    router = _mutable([_state("target", "unloaded"), _state("other", "loaded")],
+                      load_error=ProviderError("router refused: bad flag -zzz"))
+    with pytest.raises(ProviderError):
+        ModelLifecycleManager(router).ensure_only(
+            "target", LoadParams(extra_args=["-zzz"]), lambda plan: True
+        )
+    assert [s.id for s in router._states if s.status == "loaded"] == []
+    # "other" was unloaded per the plan; "target" is not unloaded a second time
+    assert [c[1] for c in router.calls if c[0] == "unload"] == ["other"]
+
+
 def test_ensure_only_unloads_the_target_when_the_load_times_out():
     router = _mutable([_state("target", "unloaded")],
                       wait_error=ProviderError("Timed out after 300s"))
