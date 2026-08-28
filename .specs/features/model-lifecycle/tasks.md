@@ -399,13 +399,17 @@ descarregado, nada carregado. `from_dict` continua tolerante a runs antigos.
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `unload()` envia `POST /models/unload` quando o host é router
-- [ ] Falha de unload é registrada e **não** interrompe o run (best-effort, MLC-14)
-- [ ] Host que não é router mantém `unload()` como no-op — sem exceção
-- [ ] Detecção é por instância/host, nunca cache global (AD-004)
-- [ ] Providers não-llamacpp seguem inalterados (teste de regressão)
-- [ ] Gate: `.venv/bin/python -m pytest -q`
-- [ ] Total ≥ 162 + 78 testes passam
+- [x] `unload()` envia `POST /models/unload` quando o host é router
+- [x] Falha de unload é registrada e **não** interrompe o run (best-effort, MLC-14)
+- [x] Host que não é router mantém `unload()` como no-op — sem exceção
+- [x] Detecção é por instância/host, nunca cache global (AD-004)
+- [x] Providers não-llamacpp seguem inalterados (teste de regressão)
+- [x] Gate: `.venv/bin/python -m pytest -q`
+- [x] Total ≥ 162 + 78 testes passam — 285 passam
+
+**Nota:** "registrar a falha" virou `provider.last_unload_error` (string inspecionável), não
+`logging` nem `warnings.warn`: o repo não configura logging, e escrever em stderr durante o
+run corromperia a TUI de tela cheia.
 
 **Tests**: unit
 **Gate**: quick
