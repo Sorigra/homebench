@@ -59,6 +59,14 @@ class SpeedMetrics:
     eval_s: float = 0.0
     load_s: float = 0.0            # model load time (excluded from other metrics)
     total_s: float = 0.0           # wall-clock request duration
+    content_tokens: int = 0        # tokens streamed in delta.content
+    reasoning_tokens: int = 0      # tokens streamed in delta.reasoning_content
+    #: prompt-processing rate. ``None`` means "unknown" -- never 0.0, which is
+    #: a valid measurement and would read as a real (very slow) prefill.
+    prefill_tps: Optional[float] = None
+    #: "server" when the rates came from the backend's own ``timings`` object,
+    #: "client" when they were timed here from the stream.
+    timings_source: str = "client"
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

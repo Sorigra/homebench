@@ -158,7 +158,7 @@ já salvos em `~/.homebench/runs/`.
 | -------------- | ----- | ----- | ------ |
 | PERF-01 | P1: tok/s de raciocínio | Design | Pending |
 | PERF-02 | P1: tok/s de raciocínio | Design | Pending |
-| PERF-03 | P1: tok/s de raciocínio | Design | Pending |
+| PERF-03 | P1: tok/s de raciocínio | T1, T4 | Pending |
 | PERF-04 | P1: tok/s de raciocínio | Design | Pending |
 | PERF-05 | P1: tok/s de raciocínio | Design | Pending |
 | PERF-06 | P2: prefill vs decode | Design | Pending |
@@ -171,7 +171,7 @@ já salvos em `~/.homebench/runs/`.
 | PERF-13 | P3: varredura de profundidade | Design | Pending |
 | PERF-14 | P3: varredura de profundidade | Design | Pending |
 | PERF-15 | P3: varredura de profundidade | Design | Pending |
-| PERF-16 | P3: compatibilidade e saídas | Design | Pending |
+| PERF-16 | P3: compatibilidade e saídas | T1, T2, T17 | Pending |
 | PERF-17 | P3: compatibilidade e saídas | Design | Pending |
 
 **Mapeamento AC → ID:** PERF-01..05 = P1 AC1..AC5 · PERF-06..09 = P2 AC1..AC4 (P2 AC5 dobra em

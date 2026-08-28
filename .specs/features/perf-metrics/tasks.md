@@ -83,7 +83,7 @@ T17
 
 ## Task Breakdown
 
-### T1: Campos novos em `SpeedMetrics`
+### T1: Campos novos em `SpeedMetrics` ✅ Complete
 
 **What**: adicionar `content_tokens`, `reasoning_tokens`, `prefill_tps: Optional[float]` e `timings_source` ao dataclass, com defaults que preservem `from_dict` de runs antigos.
 **Where**: `src/homebench/models.py`
@@ -94,11 +94,11 @@ T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Os quatro campos existem com default e `to_dict` os inclui
-- [ ] `from_dict` de um payload sem os campos novos devolve os defaults
-- [ ] `prefill_tps` aceita `None` e sobrevive ao round-trip
-- [ ] Gate check passes: `.venv/bin/python -m pytest -q tests/test_runner_report.py`
-- [ ] Test count: 378 + 3 novos = 381 testes passam (nenhuma deleção silenciosa)
+- [x] Os quatro campos existem com default e `to_dict` os inclui
+- [x] `from_dict` de um payload sem os campos novos devolve os defaults
+- [x] `prefill_tps` aceita `None` e sobrevive ao round-trip
+- [x] Gate check passes: `.venv/bin/python -m pytest -q tests/test_runner_report.py`
+- [x] Test count: 378 + 3 novos = 381 testes passam (nenhuma deleção silenciosa)
 
 **Tests**: unit
 **Gate**: quick

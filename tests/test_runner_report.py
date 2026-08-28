@@ -1,5 +1,6 @@
 import json
 
+from homebench.models import SpeedMetrics
 from homebench.quality import default_suite
 from homebench.report import rank_reports, to_json, to_markdown
 from homebench.runner import RunConfig, Runner
@@ -80,3 +81,48 @@ def test_speed_only_skips_quality():
         assert r.task_results == []
         assert r.quality_score is None
         assert r.speed.tokens_per_sec > 0
+
+
+# =====================================================================
+# SpeedMetrics: reasoning / prefill / timings-source fields (PERF-03, PERF-16)
+# =====================================================================
+def test_speed_metrics_new_fields_default_and_serialize():
+    s = SpeedMetrics()
+    assert s.content_tokens == 0
+    assert s.reasoning_tokens == 0
+    assert s.prefill_tps is None       # unknown, never a fake 0.0
+    assert s.timings_source == "client"
+
+    d = s.to_dict()
+    assert d["content_tokens"] == 0
+    assert d["reasoning_tokens"] == 0
+    assert d["prefill_tps"] is None
+    assert d["timings_source"] == "client"
+
+
+def test_speed_metrics_from_pre_feature_payload_uses_defaults():
+    # exactly the shape runs saved before this feature carry
+    legacy = {
+        "ttft_s": 0.2, "tokens_per_sec": 54.03, "prompt_tokens": 22,
+        "output_tokens": 12, "prompt_eval_s": 0.0, "eval_s": 0.22,
+        "load_s": 0.0, "total_s": 0.45,
+    }
+    s = SpeedMetrics.from_dict(legacy)
+    assert s.tokens_per_sec == 54.03      # old fields still land
+    assert s.content_tokens == 0
+    assert s.reasoning_tokens == 0
+    assert s.prefill_tps is None
+    assert s.timings_source == "client"
+
+
+def test_speed_metrics_round_trip_preserves_new_fields():
+    known = SpeedMetrics(content_tokens=7, reasoning_tokens=5,
+                         prefill_tps=2714.0, timings_source="server")
+    back = SpeedMetrics.from_dict(known.to_dict())
+    assert back.content_tokens == 7
+    assert back.reasoning_tokens == 5
+    assert back.prefill_tps == 2714.0
+    assert back.timings_source == "server"
+
+    unknown = SpeedMetrics(prefill_tps=None, timings_source="client")
+    assert SpeedMetrics.from_dict(unknown.to_dict()).prefill_tps is None
