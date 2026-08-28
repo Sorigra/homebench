@@ -193,6 +193,7 @@ def measure_at_depths(
     *,
     cfg: "RunConfig",
     warn: Optional[Callable[[str], None]] = None,
+    on_depth: Optional[Callable[[int], None]] = None,
 ) -> DepthSweep:
     """Measure ``model`` once at every depth in ``depths``, in that order.
 
@@ -205,12 +206,18 @@ def measure_at_depths(
     remaining depths still run (PERF-14). Any other ``ProviderError`` is
     re-raised: it fails this model and only this model, the way the runner
     already isolates a backend that went away (MLC-11).
+
+    ``on_depth`` is called with each depth before it is measured. The
+    default sweep is slow, and the renderers use it to show which depth is
+    running so a long run does not read as a hang.
     """
     sweep = DepthSweep()
     tokenize = _tokenizer_for(provider, model)
     measured: List[Tuple[int, SpeedMetrics]] = []
 
     for depth in depths:
+        if on_depth is not None:
+            on_depth(depth)
         prompt, _count = build_context_prompt(depth, tokenize,
                                               base_prompt=cfg.speed_prompt)
         try:

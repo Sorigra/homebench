@@ -298,7 +298,7 @@ T17
 
 ---
 
-### T10: Ligar a varredura no `Runner`
+### T10: Ligar a varredura no `Runner` ✅ Complete
 
 **What**: `RunConfig.depths`, `_measure_speed` delegando a `measure_at_depths`, e `ModelReport.speed` recebendo o ponto da menor profundidade.
 **Where**: `src/homebench/runner.py`
@@ -309,12 +309,12 @@ T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `RunConfig.depths` default `[0, 8192, 32768]` e aparece em `to_dict`
-- [ ] `ModelReport.speed` é o ponto da menor profundidade medida (compat de `score.py` e `diff`)
-- [ ] `EV_PHASE` emite a profundidade corrente para a TUI
-- [ ] Erro num modelo não contamina os outros (regressão de `test_runner_error_isolation.py`)
-- [ ] Gate check passes: `.venv/bin/python -m pytest -q`
-- [ ] Test count: 423 + 5 = 428 testes passam
+- [x] `RunConfig.depths` default `[0, 8192, 32768]` e aparece em `to_dict`
+- [x] `ModelReport.speed` é o ponto da menor profundidade medida (compat de `score.py` e `diff`)
+- [x] `EV_PHASE` emite a profundidade corrente para a TUI
+- [x] Erro num modelo não contamina os outros (regressão de `test_runner_error_isolation.py`)
+- [x] Gate check passes: `.venv/bin/python -m pytest -q`
+- [x] Test count: 423 + 5 = 428 testes passam
 
 **Tests**: unit
 **Gate**: full

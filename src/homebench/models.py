@@ -156,8 +156,8 @@ class ModelReport:
     speed: SpeedMetrics = field(default_factory=SpeedMetrics)
     memory: MemoryMetrics = field(default_factory=MemoryMetrics)
     task_results: List[TaskResult] = field(default_factory=list)
-    #: one point per measured context depth. Empty for runs saved before the
-    #: depth sweep existed, and for runs measured at depth 0 only.
+    #: one point per measured context depth, in the order they were
+    #: measured. Empty for runs saved before the depth sweep existed.
     depth_results: List[DepthMetrics] = field(default_factory=list)
     error: Optional[str] = None
     #: Non-fatal notes for this model (e.g. a best-effort unload that failed).
