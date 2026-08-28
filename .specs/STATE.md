@@ -154,72 +154,77 @@ descarga individual.
 
 ## Handoff
 
-**Onde parou:** feature `perf-metrics` **implementada e validada** em 2026-08-28.
-`validation.md` → **PASS**; `validate_state.py` → 0 erros. Falta só o **teste de aceitação ao
-vivo** contra o router e a decisão de merge/release.
+**Onde parou:** `perf-metrics` mesclada, **testada ao vivo pelo usuário**, e dois defeitos que o
+teste ao vivo revelou já corrigidos. `main` está em **0.13.1**, tag `v0.13.1`. 2026-08-28.
 
-**Branch:** `feat/perf-metrics`, 20 commits à frente de `main` (`d530695`). **Nada enviado para
-remoto.** `git push` continua exigindo autorização explícita na hora.
+**Nada enviado para remoto.** `main` local está à frente de `origin/main`; as tags `v0.13.0` e
+`v0.13.1` só existem localmente. `git push` e `git push --tags` continuam exigindo autorização
+explícita na hora. A branch `feat/perf-metrics` ainda existe (não deletada).
 
-**Testes:** 378 → **454 coletados, 449 passam, 5 pulados** (`tests/test_live_router.py`, só com
-`HOMEBENCH_LIVE=1`, nunca no CI). Gate de build verde (`twine check` PASSOU nos dois artefatos).
+**Testes:** **456 passam, 5 pulados** (449 + 7 novos). `twine check` PASSOU em
+`homebench-0.13.1-py3-none-any.whl` e `.tar.gz`.
 
-### O que a feature entrega
+### Teste de aceitação ao vivo: FEITO
 
-1. `reasoning_content` conta no timing — o defeito que zerava o tok/s de modelo de raciocínio.
-2. Prefill e decode separados, vindos do `timings` server-side quando existe; `prefill_tps` fica
-   `None` (renderizado `–`) quando o backend não informa, nunca um zero falso.
-3. Varredura de profundidade `0/8192/32768` ligada por padrão, `--depths` para mudar; uma linha
-   de leaderboard por (modelo, profundidade) em Rich, Markdown, HTML, plainui e TUI.
-4. Compatibilidade preservada: `score.py`, `history.py` e `diff` não foram tocados e seguem lendo
-   `speed.tokens_per_sec`, que por contrato é a profundidade mais rasa medida.
+O usuário rodou contra o router real (run salvo em `~/.homebench/runs/run-20260828-164828.json`,
+3 modelos, varredura completa `0/8192/32768`). **A feature passou:**
 
-### Validação
+- `Ornith-1.5-35B-A3B-Q8`: decode 53.4 tok/s onde antes reportava `0.00` — o defeito do
+  `reasoning_content` está morto, confirmado contra hardware.
+- Degradação por profundidade é real e coerente: decode 53.4 → 50.6 → 43.5, prefill
+  204 → 981 → 798 (o prefill sobe do depth 0 porque 31 tokens não amortizam o batch).
+- `timings_source: "server"` em todos os pontos; `cache_hit_tokens: 0` em todos, ou seja o
+  `cache_prompt=False` está de fato impedindo leitura de KV cache.
 
-Feita **inline pelo orquestrador**, não por Verifier subagente — decisão do usuário por
-orçamento. 17/17 ACs com evidência `file:line`. Sensor de discriminação: 6 mutações, 6 mortas,
-0 sobreviventes (uma sétima descartada como mutante equivalente, justificada no relatório).
-Ressalva registrada: a spec e a validação têm o mesmo autor, então erro de origem na spec teria
-menor chance de ser pego.
+### Dois defeitos que o run ao vivo expôs — corrigidos em 0.13.1
 
-### Estado do release
+**1. Coluna `Memory` sempre vazia (`ab2ebf8`).** O provider `llamacpp` herdava o `memory()` vazio
+do OpenAI-compatible, que delega para amostragem de RSS. **RSS é cego neste host:** com
+`--n-gpu-layers 999` os pesos ficam na memória da GPU e nunca entram no resident set do
+`llama-server` — o Ornith (37,8 GB em disco) amostrou 2,3 GB de Peak, e o
+`foundation-sec-8b-q4_k_m` amostrou **zero**. Agora `memory()` lê o argv que o router resolveu
+(`GET /v1/models` → `status.args`), pega o caminho do `--model` e mede o GGUF. Caminho de
+container é mapeado por `$HOMEBENCH_MODEL_DIR` (aqui `/home/ai-models`), descartando componentes
+iniciais até o resto resolver. Não resolveu ⇒ métrica vazia, nunca um chute. GGUF dividido soma
+os pedaços. **Verificado ao vivo nos 17 modelos, sem carregar nenhum** (só leitura).
 
-**Mesclada e taguada localmente em 2026-08-28.** `main` = merge `--no-ff` `8046893` + bump
-`76bee68`, versão **0.13.0** nos dois arquivos (`pyproject.toml`, `src/homebench/__init__.py`,
-runtime confirmado), tag **`v0.13.0`**. Suíte e build gate verdes na `main` depois do merge:
-449 passam, 5 pulados; `twine check` PASSOU nos dois artefatos.
+**2. Erro dentro de um stream 200 era engolido (`7f40712`).** O `llama-server` responde 200 e
+manda `data: {"error": ...}` no meio do stream quando a geração falha — prompt acima da janela de
+contexto, por exemplo. O parser só lia `choices`, então o frame era ignorado e a chamada
+retornava "com sucesso" e zero tokens: mais um `0.00 tok/s` com cara de medição válida, a mesma
+família de defeito que a feature existe para eliminar. Foi o que aconteceu com
+`foundation-sec-8b-q4_k_m` em 32768 (`depth_actual: 0`, `output_tokens: 0`, `skipped: None`).
+Agora levanta `ProviderError` com a mensagem do servidor, e a varredura reconhece overflow de
+contexto e pula aquela profundidade com o motivo.
 
-**Nada enviado para remoto.** `main` local está à frente de `origin/main`; a tag `v0.13.0` só
-existe localmente. `git push` e `git push --tags` continuam exigindo autorização explícita.
+Processo: conserto direto, inline, dois commits atômicos, sem subagente e sem pipeline de 4
+fases — dimensionado à mudança, conforme `AGENTS.md § Cost discipline`.
 
-A branch `feat/perf-metrics` ainda existe (não deletada).
+### Achado de ambiente (não é bug do homebench)
 
-### Pendência real: teste de aceitação ao vivo
+O preset do router para **`gpt-oss-120b`** aponta `--model` para
+`/models/gpt-oss-120b/eagle3-gpt-oss-120b-Q8_0.gguf` — o modelo de rascunho, **849 MB** — e não
+para `gpt-oss-120b-MXFP4.gguf` (63 GB). Benchmarcar `gpt-oss-120b` mede o draft. O id
+`gpt-oss-120b-eagle3` está correto (MXFP4 como `--model` + eagle3 como draft). Confirmar o preset
+antes de comparar esses dois.
 
-**Nunca foi executado.** A feature foi mesclada com a validação determinística verde, mas sem
-confirmação contra o router de verdade. Rodar:
+### Pendências
 
-```bash
-export LLAMACPP_API_KEY="$(cat ~/llm-server/llama/api-key.txt)"
-.venv/bin/homebench run --provider llamacpp --host http://127.0.0.1:8080 \
-  --no-quality -m Ornith-1.5-35B-A3B-Q8 --depths 0 --force-unload --no-tui
-```
+- `git push` / `git push --tags`: **não feito, não autorizado**.
+- `CLAUDE.md` continua modificado na árvore de trabalho desde antes desta feature (reduzido a
+  `@AGENTS.md`). Não é mudança destas sessões e nunca foi commitado — decisão do usuário.
+- `homebench-report.md` na raiz é o relatório zerado de 0.12.0 que originou tudo; não rastreado.
 
-Esperado ≈54 tok/s, TTFT ≈129 ms (antes da feature: `0.00`). Para ver a varredura inteira,
-`-m gemma4-e2b` sem `--depths`: decode 95.1 → 83.3 → 73.0 e prefill 2714 → 2709 → 1805.
-Num modelo de 35B a varredura padrão é lenta — o prefill de 32k domina.
-
-Se o teste ao vivo reprovar, o conserto vai em cima da `main` como `fix`, com bump para 0.13.1.
-
-### Regra nova desta sessão
+### Regra desta fork
 
 `AGENTS.md § Cost discipline` (commit `56641c8`): Sonnet é o default, processo dimensionado à
 mudança, máximo 3 subagentes incluindo Verifier, e **declarar o custo esperado antes de
-despachar**. O usuário estourou ~85% da assinatura nesta feature; custo é requisito.
+despachar**. O usuário estourou ~85% da assinatura na feature `perf-metrics`; custo é requisito.
 
 ### Autorizações e proibições permanentes
 
 - **Proibido:** iniciar, parar ou reiniciar qualquer container (AD-001).
 - **Proibido sem autorização explícita na hora:** `git push` e qualquer operação remota.
 - Chave da API em `~/llm-server/llama/api-key.txt` — **nunca logar nem commitar**.
-- Estado do router ao fim desta sessão: **todos os 17 modelos `unloaded`**, como estava antes.
+- Estado do router ao fim desta sessão: nenhum modelo foi carregado por mim (só chamadas de
+  leitura `GET /props` e `GET /v1/models`).
