@@ -369,7 +369,7 @@ T17
 
 ---
 
-### T13: Markdown, JSON e HTML
+### T13: Markdown, JSON e HTML ✅ Complete
 
 **What**: os três exportadores consumindo `leaderboard_rows()` para não divergirem do terminal.
 **Where**: `src/homebench/report.py`
@@ -380,11 +380,11 @@ T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] O cabeçalho Markdown traz as colunas novas e uma linha por profundidade
-- [ ] O HTML idem, com a barra de proporção calibrada pelo decode
-- [ ] O JSON exporta `depth_results` completo
-- [ ] Gate check passes: `.venv/bin/python -m pytest -q tests/test_reports.py`
-- [ ] Test count: 437 + 4 = 441 testes passam
+- [x] O cabeçalho Markdown traz as colunas novas e uma linha por profundidade
+- [x] O HTML idem, com a barra de proporção calibrada pelo decode
+- [x] O JSON exporta `depth_results` completo
+- [x] Gate check passes: `.venv/bin/python -m pytest -q tests/test_reports.py`
+- [x] Test count: 437 + 4 = 441 testes passam
 
 **Tests**: unit
 **Gate**: quick

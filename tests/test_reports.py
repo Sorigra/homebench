@@ -261,3 +261,85 @@ def test_leaderboard_table_has_depth_prefill_decode_columns():
     assert "Depth" in headers
     assert "Prefill tok/s" in headers
     assert "Decode tok/s" in headers
+
+
+# =====================================================================
+# Markdown / JSON / HTML exports render the same depth rows (T13, PERF-17)
+# =====================================================================
+def test_markdown_leaderboard_has_one_row_per_depth_with_new_columns():
+    points = [
+        DepthMetrics(depth_requested=0, depth_actual=22, prefill_tps=2714.0,
+                     decode_tps=95.1, ttft_s=0.1),
+        DepthMetrics(depth_requested=8192, depth_actual=8190, prefill_tps=2709.0,
+                     decode_tps=83.3, ttft_s=1.0),
+        DepthMetrics(depth_requested=32768, depth_actual=32001, prefill_tps=1805.0,
+                     decode_tps=73.0, ttft_s=4.0),
+    ]
+    result = BenchmarkResult(provider="llamacpp",
+                             reports=[_report_with_depths("gemma4-e2b", points)])
+    md = to_markdown(result)
+    assert "| # | Model | Params | Quality | Pass | Depth | Prefill tok/s " \
+           "| Decode tok/s | TTFT | Memory | Peak | Value |" in md
+    # one data row per depth, each carrying its own decode figure
+    assert md.count("| 1 | gemma4-e2b |") == 3
+    assert "95.1" in md and "83.3" in md and "73.0" in md
+    assert "22" in md and "8190" in md and "32001" in md
+
+
+def test_markdown_leaderboard_shows_dash_for_missing_prefill():
+    point = DepthMetrics(depth_requested=0, depth_actual=10, prefill_tps=None,
+                         decode_tps=54.03, ttft_s=0.129)
+    result = BenchmarkResult(provider="llamacpp",
+                             reports=[_report_with_depths("Ornith-1.5-35B-A3B-Q8", [point])])
+    md = to_markdown(result)
+    assert "54.0" in md
+    assert "0.00" not in md
+
+
+def test_html_leaderboard_has_depth_and_prefill_columns_and_decode_bar():
+    points = [
+        DepthMetrics(depth_requested=0, depth_actual=22, prefill_tps=2714.0,
+                     decode_tps=95.1, ttft_s=0.1),
+        DepthMetrics(depth_requested=8192, depth_actual=8190, prefill_tps=2709.0,
+                     decode_tps=83.3, ttft_s=1.0),
+    ]
+    result = BenchmarkResult(provider="llamacpp",
+                             reports=[_report_with_depths("gemma4-e2b", points)])
+    html = to_html(result)
+    assert "<th class=\"num\">Depth</th>" in html
+    assert "<th class=\"num\">Prefill tok/s</th>" in html
+    assert "Decode tok/s</th>" in html
+    # two depth rows rendered, each with its own decode bar/value
+    assert html.count("<td class=\"model\">gemma4-e2b</td>") == 2
+    assert "95.1" in html and "83.3" in html
+    # the bar width is calibrated per row by decode_tps, not a single value
+    # repeated for the whole model: the faster (shallower) row hits 100%,
+    # the slower (deeper) one is proportionally smaller (83.3/95.1 ~= 88%).
+    assert "width:100%" in html
+    assert "width:88%" in html
+
+
+def test_to_json_exports_full_depth_results():
+    import json
+
+    from homebench.report import to_json
+
+    _, result = _fake_run_with_default_depths()
+    data = json.loads(to_json(result))
+    rep = data["reports"][0]
+    assert "depth_results" in rep
+    assert len(rep["depth_results"]) == len(result.reports[0].depth_results) > 0
+    first = rep["depth_results"][0]
+    assert set(first) == {
+        "depth_requested", "depth_actual", "prefill_tps", "decode_tps",
+        "ttft_s", "prompt_eval_s", "output_tokens", "cache_hit_tokens", "skipped",
+    }
+
+
+def _fake_run_with_default_depths():
+    from homebench.runner import RunConfig, Runner
+
+    provider = FakeProvider()
+    runner = Runner(provider, RunConfig(sample_rss=False, use_cache=False,
+                                        run_quality=False))
+    return provider, runner.run(provider.list_models())
