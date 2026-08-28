@@ -272,7 +272,7 @@ T17
 
 ---
 
-### T9: `measure_at_depths()`
+### T9: `measure_at_depths()` ✅ Complete
 
 **What**: rodar a medição em cada profundidade, com `cache_prompt=False`, repetição dentro da profundidade, e pular profundidade quando o contexto estoura.
 **Where**: `src/homebench/metrics/depth.py`
@@ -283,14 +283,14 @@ T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Devolve um `DepthMetrics` por profundidade pedida, na ordem dada
-- [ ] `depth_actual` vem do `prompt_n` do servidor, nunca do alvo pedido
-- [ ] `ProviderError` de contexto excedido → `skipped` preenchido e as demais profundidades seguem
-- [ ] Qualquer outro `ProviderError` **sobe** (preserva MLC-11)
-- [ ] `cache_n > 0` gera aviso, sem descartar a medição
-- [ ] `--repeat > 1` repete dentro de cada profundidade, não a varredura inteira
-- [ ] Gate check passes: `.venv/bin/python -m pytest -q tests/test_depth_measure.py`
-- [ ] Test count: 414 + 9 = 423 testes passam
+- [x] Devolve um `DepthMetrics` por profundidade pedida, na ordem dada
+- [x] `depth_actual` vem do `prompt_n` do servidor, nunca do alvo pedido
+- [x] `ProviderError` de contexto excedido → `skipped` preenchido e as demais profundidades seguem
+- [x] Qualquer outro `ProviderError` **sobe** (preserva MLC-11)
+- [x] `cache_n > 0` gera aviso, sem descartar a medição
+- [x] `--repeat > 1` repete dentro de cada profundidade, não a varredura inteira
+- [x] Gate check passes: `.venv/bin/python -m pytest -q tests/test_depth_measure.py`
+- [x] Test count: 414 + 9 = 423 testes passam
 
 **Tests**: unit
 **Gate**: quick
