@@ -98,6 +98,12 @@ def build_parser() -> argparse.ArgumentParser:
     list_p.add_argument("--provider", default=None)
     list_p.add_argument("--host", default=None)
 
+    models_p = sub.add_parser(
+        "models",
+        help="list a llama.cpp router's models, their state and load parameters")
+    models_p.add_argument("--provider", default=None)
+    models_p.add_argument("--host", default=None)
+
     tasks_p = sub.add_parser("tasks", help="list the quality tasks and exit")
     tasks_p.add_argument("--tasks", action="append", default=None, metavar="PACK",
                          help="preview a task pack instead of the built-in suite")
@@ -182,8 +188,8 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-_COMMANDS = {"run", "list", "tasks", "history", "diff", "throughput", "fit",
-             "report", "doctor"}
+_COMMANDS = {"run", "list", "models", "tasks", "history", "diff", "throughput",
+             "fit", "report", "doctor"}
 
 
 def _inject_default_command(argv: List[str]) -> List[str]:
@@ -402,6 +408,50 @@ def cmd_list(args, console: Console) -> int:
         t.add_row(m.name, m.parameter_size or "–", m.quantization or "–",
                   m.family or "–", fmt_bytes(m.size_bytes))
     console.print(t)
+    return 0
+
+
+def cmd_models(args, console: Console) -> int:
+    """`homebench models` — what the router has, what is resident, with what argv."""
+    from rich.table import Table
+
+    from .lifecycle.router import LlamaRouterClient
+
+    provider = getattr(args, "provider", None)
+    if provider and provider != "llamacpp":
+        console.print(f"[red]error:[/red] model state is a llama.cpp router feature; "
+                      f"provider {provider!r} does not report it.")
+        return 1
+
+    client = LlamaRouterClient(host=getattr(args, "host", None))
+    try:
+        info = client.props()
+        states = client.list_models()
+    except ProviderError as exc:
+        console.print(f"[red]error:[/red] {exc}")
+        return 1
+    if info.role != "router":
+        console.print(f"[yellow]note:[/yellow] {client.host} is not a llama.cpp "
+                      "router — it does not report per-model state.")
+        return 1
+
+    t = Table(title=f"Router models ({client.host})", header_style="bold cyan")
+    t.add_column("Model", style="bold")
+    t.add_column("State")
+    t.add_column("Source")
+    t.add_column("Load parameters")
+    styles = {"loaded": "green", "loading": "yellow"}
+    for m in sorted(states, key=lambda s: s.id):
+        style = styles.get(m.status, "dim")
+        # only residents report parameters that are actually in effect
+        params = " ".join(m.args) if m.status == "loaded" else "–"
+        t.add_row(m.id, f"[{style}]{m.status}[/{style}]", m.source or "–", params)
+    console.print(t)
+
+    resident = sum(1 for m in states if m.status == "loaded")
+    console.print(f"[dim]{len(states)} model(s) · {resident} resident · "
+                  f"build {info.build_info or '?'} · max {info.max_instances} "
+                  "loaded at once[/dim]")
     return 0
 
 
@@ -744,6 +794,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     command = getattr(args, "command", None)
     if command == "list":
         return cmd_list(args, console)
+    if command == "models":
+        return cmd_models(args, console)
     if command == "tasks":
         return cmd_tasks(args, console)
     if command == "doctor":

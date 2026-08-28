@@ -490,12 +490,17 @@ escopo); ficam registradas na lista para que a omissão seja deliberada e visív
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Subcomando lista cada modelo com estado; residentes mostram os parâmetros efetivos
-- [ ] O nome está em `_COMMANDS` (`cli.py:182`)
-- [ ] **Teste paramétrico** cobre todos os subparsers registrados vs `_COMMANDS`, falhando se divergirem (mitiga o risco registrado no design)
-- [ ] Router inalcançável reporta erro citando o host, sem stack trace
-- [ ] Gate: `.venv/bin/python -m pytest -q`
-- [ ] Total ≥ 162 + 98 testes passam
+- [x] Subcomando lista cada modelo com estado; residentes mostram os parâmetros efetivos
+- [x] O nome está em `_COMMANDS` (`cli.py:182`)
+- [x] **Teste paramétrico** cobre todos os subparsers registrados vs `_COMMANDS`, falhando se divergirem (mitiga o risco registrado no design) — verificado na hora: tirar `"models"` de `_COMMANDS` quebra 11 testes
+- [x] Router inalcançável reporta erro citando o host, sem stack trace
+- [x] Gate: `.venv/bin/python -m pytest -q`
+- [x] Total ≥ 162 + 98 testes passam — 338 passam
+
+**Nota:** `cmd_models` fala direto com `LlamaRouterClient`, sem passar por `_resolve_provider`.
+É o que permite citar o host na falha: o erro de `_resolve_provider` diz só "provider não
+alcançável", enquanto `ProviderError` do cliente já traz o host. `--provider` diferente de
+`llamacpp` é recusado com explicação.
 
 **Tests**: unit
 **Gate**: quick
