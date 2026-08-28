@@ -59,6 +59,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help="don't pre-load models before timing")
         sp.add_argument("--no-unload", action="store_true",
                         help="keep models loaded between runs")
+        sp.add_argument("--force-unload", dest="force_unload", action="store_true",
+                        help="unload other resident models without asking "
+                             "(llama.cpp router hosts)")
         sp.add_argument("--no-rss", action="store_true",
                         help="disable psutil RSS sampling")
         sp.add_argument("--judge", default=None, metavar="MODEL",
@@ -265,7 +268,71 @@ def _resolve_suite(args):
     return suite
 
 
-def _build_runner(provider, args) -> Runner:
+# ---------------------------------------------------------------------------
+# llama.cpp router lifecycle: make sure only the model under test is resident
+# before anything is measured, and never unload someone else's session without
+# saying so first (MLC-03, MLC-08).
+#
+# Parameters the server resolved itself ("preset") are not echoed back as
+# extra_args: that argv is already the command line the router would use, and
+# sending it again would duplicate it.
+_SENDABLE_ORIGINS = ("explicit", "json", "heuristic")
+
+
+def _make_confirmer(args, console: Console):
+    """A Confirmer for ``ensure_only`` that reports the plan, then asks."""
+
+    def confirm(plan) -> bool:
+        console.print(
+            f"[yellow]This will unload {len(plan.to_unload)} loaded model(s):[/yellow] "
+            f"{', '.join(plan.to_unload)}"
+        )
+        if getattr(args, "force_unload", False):
+            return True
+        if not sys.stdin.isatty():
+            console.print(
+                "[red]error:[/red] refusing to unload a model without confirmation "
+                "in a non-interactive session — re-run with [b]--force-unload[/b] "
+                "to proceed."
+            )
+            return False
+        return input("Unload them and continue? [y/N] ").strip().lower() in ("y", "yes")
+
+    return confirm
+
+
+def _prepare_router_models(provider, models, args, console: Console):
+    """Leave only the first model to be measured resident on a router host.
+
+    Returns ``(proceed, load_params)``. ``proceed`` is False when the user
+    declined, in which case nothing was unloaded and no benchmark may run.
+    Providers whose host is not a llama.cpp router are left alone.
+    """
+    get_router = getattr(provider, "router", None)
+    client = get_router() if callable(get_router) else None
+    if client is None or not models:
+        return True, None
+
+    from .lifecycle.manager import ModelLifecycleManager
+    from .lifecycle.models import LoadParams
+    from .lifecycle.params import load_overrides, resolve
+
+    target = models[0].name
+    state = next((m for m in client.list_models() if m.id == target), None)
+    params = resolve(state, overrides=load_overrides()) if state else LoadParams()
+    if params.origin not in _SENDABLE_ORIGINS:
+        params = LoadParams(extra_args=[], origin=params.origin)
+
+    manager = ModelLifecycleManager(client)
+    outcome = manager.ensure_only(target, params, _make_confirmer(args, console))
+    if outcome.aborted:
+        console.print("[yellow]aborted:[/yellow] nothing was unloaded and no "
+                      "benchmark was run.")
+        return False, None
+    return True, {target: outcome.effective_args}
+
+
+def _build_runner(provider, args, load_params=None) -> Runner:
     judge = None
     include_open = False
     if getattr(args, "judge", None):
@@ -291,6 +358,7 @@ def _build_runner(provider, args) -> Runner:
         quick=not getattr(args, "full", False),
         use_cache=not getattr(args, "no_cache", False),
         refresh_cache=getattr(args, "refresh_cache", False),
+        load_params=load_params,
     )
     return Runner(provider, config, judge=judge)
 
@@ -613,7 +681,10 @@ def cmd_run(args, console: Console) -> int:
     try:
         provider = _resolve_provider(args, console)
         models = _select_models(provider, args, console)
-        runner = _build_runner(provider, args)
+        proceed, load_params = _prepare_router_models(provider, models, args, console)
+        if not proceed:
+            return 1
+        runner = _build_runner(provider, args, load_params=load_params)
     except ProviderError as exc:
         console.print(f"[red]error:[/red] {exc}")
         return 1

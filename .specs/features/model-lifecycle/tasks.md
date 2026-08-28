@@ -457,12 +457,21 @@ escopo); ficam registradas na lista para que a omissão seja deliberada e visív
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `--force-unload` existe e pula a confirmação
-- [ ] Sem a flag, a confirmação lista **quais** modelos serão descarregados antes de perguntar
-- [ ] Entrada não interativa sem a flag aborta com mensagem dizendo como prosseguir — nunca descarrega sozinho (MLC-08)
-- [ ] Recusa aborta sem descarregar e sem rodar benchmark
-- [ ] Gate: `.venv/bin/python -m pytest -q`
-- [ ] Total ≥ 162 + 91 testes passam
+- [x] `--force-unload` existe e pula a confirmação
+- [x] Sem a flag, a confirmação lista **quais** modelos serão descarregados antes de perguntar
+- [x] Entrada não interativa sem a flag aborta com mensagem dizendo como prosseguir — nunca descarrega sozinho (MLC-08)
+- [x] Recusa aborta sem descarregar e sem rodar benchmark
+- [x] Gate: `.venv/bin/python -m pytest -q`
+- [x] Total ≥ 162 + 91 testes passam — 309 passam
+
+**Notas:**
+1. `_prepare_router_models` prepara **o primeiro** modelo selecionado, uma vez, antes do run.
+   Chamar `ensure_only` por modelo dentro do laço exigiria mexer em `runner.py:_run_model`, que
+   não está no escopo de nenhuma tarefa desta feature. Para N modelos, os demais dependem de
+   `unload_between` (T12) + `warmup`. Lacuna conhecida, registrada aqui.
+2. A CLI **não** reenvia como `extra_args` os parâmetros de origem `preset`/`default`: `resolve()`
+   devolve em `extra_args` o argv inteiro que o servidor já resolveu, e mandá-lo de volta
+   duplicaria a linha de comando do router. Só `explicit`, `json` e `heuristic` são enviados.
 
 **Tests**: unit
 **Gate**: quick
