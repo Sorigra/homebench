@@ -68,7 +68,7 @@ class PlainReporter:
             return Text(f"quality {done}/{self.total_tasks}", style="yellow")
         colors = {
             "done": "green", "error": "red", "queued": "dim",
-            "warmup": "cyan", "speed": "cyan", "starting": "cyan",
+            "warmup": "cyan", "speed": "cyan", "starting": "cyan", "prepare": "cyan",
         }
         return Text(s, style=colors.get(s, "yellow"))
 
@@ -127,4 +127,7 @@ def run_plain(runner: Runner, models: List[ModelInfo], console: Console) -> Benc
     from .report import leaderboard_table
 
     console.print(leaderboard_table(result, title="Final leaderboard"))
+    for rep in result.reports:
+        for note in rep.warnings:
+            console.print(f"[yellow]warning[/yellow] · {rep.model.name}: {note}")
     return result

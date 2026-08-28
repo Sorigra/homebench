@@ -119,6 +119,9 @@ class ModelReport:
     memory: MemoryMetrics = field(default_factory=MemoryMetrics)
     task_results: List[TaskResult] = field(default_factory=list)
     error: Optional[str] = None
+    #: Non-fatal notes for this model (e.g. a best-effort unload that failed).
+    #: The run continues; the warning is kept so it reaches the report (MLC-14).
+    warnings: List[str] = field(default_factory=list)
 
     # ---- derived views -------------------------------------------------
     @property
@@ -142,6 +145,7 @@ class ModelReport:
             "tasks_total": len(self.task_results),
             "task_results": [t.to_dict() for t in self.task_results],
             "error": self.error,
+            "warnings": list(self.warnings),
         }
 
     @classmethod
@@ -152,6 +156,7 @@ class ModelReport:
             memory=MemoryMetrics.from_dict(d.get("memory", {})),
             task_results=[TaskResult.from_dict(t) for t in d.get("task_results", [])],
             error=d.get("error"),
+            warnings=list(d.get("warnings", []) or []),
         )
 
 

@@ -59,6 +59,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help="don't pre-load models before timing")
         sp.add_argument("--no-unload", action="store_true",
                         help="keep models loaded between runs")
+        sp.add_argument("--force-unload", dest="force_unload", action="store_true",
+                        help="unload other resident models without asking "
+                             "(llama.cpp router hosts)")
         sp.add_argument("--no-rss", action="store_true",
                         help="disable psutil RSS sampling")
         sp.add_argument("--judge", default=None, metavar="MODEL",
@@ -94,6 +97,12 @@ def build_parser() -> argparse.ArgumentParser:
     list_p = sub.add_parser("list", help="list discovered models and exit")
     list_p.add_argument("--provider", default=None)
     list_p.add_argument("--host", default=None)
+
+    models_p = sub.add_parser(
+        "models",
+        help="list a llama.cpp router's models, their state and load parameters")
+    models_p.add_argument("--provider", default=None)
+    models_p.add_argument("--host", default=None)
 
     tasks_p = sub.add_parser("tasks", help="list the quality tasks and exit")
     tasks_p.add_argument("--tasks", action="append", default=None, metavar="PACK",
@@ -179,8 +188,8 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-_COMMANDS = {"run", "list", "tasks", "history", "diff", "throughput", "fit",
-             "report", "doctor"}
+_COMMANDS = {"run", "list", "models", "tasks", "history", "diff", "throughput",
+             "fit", "report", "doctor"}
 
 
 def _inject_default_command(argv: List[str]) -> List[str]:
@@ -265,7 +274,104 @@ def _resolve_suite(args):
     return suite
 
 
-def _build_runner(provider, args) -> Runner:
+# ---------------------------------------------------------------------------
+# llama.cpp router lifecycle: make sure only the model under test is resident
+# before anything is measured, and never unload someone else's session without
+# saying so first (MLC-03, MLC-08).
+#
+# Parameters the server resolved itself ("preset") are not echoed back as
+# extra_args: that argv is already the command line the router would use, and
+# sending it again would duplicate it.
+_SENDABLE_ORIGINS = ("explicit", "json", "heuristic")
+
+
+def _make_confirmer(args, console: Console):
+    """A Confirmer for ``ensure_only`` that reports the plan, then asks."""
+
+    def confirm(plan) -> bool:
+        console.print(
+            f"[yellow]This will unload {len(plan.to_unload)} loaded model(s):[/yellow] "
+            f"{', '.join(plan.to_unload)}"
+        )
+        if getattr(args, "force_unload", False):
+            return True
+        if not sys.stdin.isatty():
+            console.print(
+                "[red]error:[/red] refusing to unload a model without confirmation "
+                "in a non-interactive session — re-run with [b]--force-unload[/b] "
+                "to proceed."
+            )
+            return False
+        return input("Unload them and continue? [y/N] ").strip().lower() in ("y", "yes")
+
+    return confirm
+
+
+def _prepare_router_models(provider, models, args, console: Console):
+    """Prepare a llama.cpp router so each measured model runs as the sole resident.
+
+    Returns ``(proceed, prepare_hook)``. ``proceed`` is False when the user
+    declined to unload a model that is not part of this run, in which case
+    nothing was unloaded and no benchmark may run. ``prepare_hook``, when not
+    None, is handed to the Runner and called once per model at the start of
+    that model's turn: it unloads every other resident (MLC-03), loads the
+    target if needed, and returns the argv it actually loaded with (MLC-09).
+    Providers whose host is not a llama.cpp router get ``(True, None)``.
+    """
+    get_router = getattr(provider, "router", None)
+    client = get_router() if callable(get_router) else None
+    if client is None or not models:
+        return True, None
+
+    from .lifecycle.manager import ModelLifecycleManager
+    from .lifecycle.models import LifecyclePlan, LoadParams
+    from .lifecycle.params import load_overrides, resolve
+
+    our_names = {m.name for m in models}
+    # Models resident now that this run will not measure. Unloading one could
+    # cut off a third party using Open WebUI, so it needs explicit confirmation
+    # up front (AD-002). Models this run does measure are cycled freely as their
+    # turn comes -- they belong to the benchmark.
+    foreign = [m.id for m in client.list_models()
+               if m.status == "loaded" and m.id not in our_names]
+    if foreign:
+        plan = LifecyclePlan(target="(run)", to_unload=foreign,
+                             reason="models not part of this run are resident")
+        if not _make_confirmer(args, console)(plan):
+            console.print("[yellow]aborted:[/yellow] nothing was unloaded and no "
+                          "benchmark was run.")
+            return False, None
+
+    overrides = load_overrides()
+    manager = ModelLifecycleManager(client)
+    # What this run is allowed to unload without asking again: the residents
+    # the user just approved, plus the models the run itself measures (choosing
+    # them for the benchmark IS the authorisation -- AD-007). Anything else that
+    # turns up resident mid-run is a third party we did not get to confirm.
+    approved = our_names | set(foreign)
+
+    def _authorise(plan):
+        surprise = [v for v in plan.to_unload if v not in approved]
+        if surprise:
+            raise ProviderError(
+                "a model not part of this run became resident during it ("
+                + ", ".join(surprise)
+                + "); re-run so it can be confirmed before unloading"
+            )
+        return True
+
+    def prepare(model):
+        state = next((m for m in client.list_models() if m.id == model.name), None)
+        params = resolve(state, overrides=overrides) if state else LoadParams()
+        if params.origin not in _SENDABLE_ORIGINS:
+            params = LoadParams(extra_args=[], origin=params.origin)
+        outcome = manager.ensure_only(model.name, params, _authorise)
+        return outcome.effective_args
+
+    return True, prepare
+
+
+def _build_runner(provider, args, prepare_hook=None) -> Runner:
     judge = None
     include_open = False
     if getattr(args, "judge", None):
@@ -292,7 +398,7 @@ def _build_runner(provider, args) -> Runner:
         use_cache=not getattr(args, "no_cache", False),
         refresh_cache=getattr(args, "refresh_cache", False),
     )
-    return Runner(provider, config, judge=judge)
+    return Runner(provider, config, judge=judge, prepare_model=prepare_hook)
 
 
 def _export(result, args, console: Console) -> None:
@@ -334,6 +440,50 @@ def cmd_list(args, console: Console) -> int:
         t.add_row(m.name, m.parameter_size or "–", m.quantization or "–",
                   m.family or "–", fmt_bytes(m.size_bytes))
     console.print(t)
+    return 0
+
+
+def cmd_models(args, console: Console) -> int:
+    """`homebench models` — what the router has, what is resident, with what argv."""
+    from rich.table import Table
+
+    from .lifecycle.router import LlamaRouterClient
+
+    provider = getattr(args, "provider", None)
+    if provider and provider != "llamacpp":
+        console.print(f"[red]error:[/red] model state is a llama.cpp router feature; "
+                      f"provider {provider!r} does not report it.")
+        return 1
+
+    client = LlamaRouterClient(host=getattr(args, "host", None))
+    try:
+        info = client.props()
+        states = client.list_models()
+    except ProviderError as exc:
+        console.print(f"[red]error:[/red] {exc}")
+        return 1
+    if info.role != "router":
+        console.print(f"[yellow]note:[/yellow] {client.host} is not a llama.cpp "
+                      "router — it does not report per-model state.")
+        return 1
+
+    t = Table(title=f"Router models ({client.host})", header_style="bold cyan")
+    t.add_column("Model", style="bold")
+    t.add_column("State")
+    t.add_column("Source")
+    t.add_column("Load parameters")
+    styles = {"loaded": "green", "loading": "yellow"}
+    for m in sorted(states, key=lambda s: s.id):
+        style = styles.get(m.status, "dim")
+        # only residents report parameters that are actually in effect
+        params = " ".join(m.args) if m.status == "loaded" else "–"
+        t.add_row(m.id, f"[{style}]{m.status}[/{style}]", m.source or "–", params)
+    console.print(t)
+
+    resident = sum(1 for m in states if m.status == "loaded")
+    console.print(f"[dim]{len(states)} model(s) · {resident} resident · "
+                  f"build {info.build_info or '?'} · max {info.max_instances} "
+                  "loaded at once[/dim]")
     return 0
 
 
@@ -613,7 +763,10 @@ def cmd_run(args, console: Console) -> int:
     try:
         provider = _resolve_provider(args, console)
         models = _select_models(provider, args, console)
-        runner = _build_runner(provider, args)
+        proceed, prepare_hook = _prepare_router_models(provider, models, args, console)
+        if not proceed:
+            return 1
+        runner = _build_runner(provider, args, prepare_hook=prepare_hook)
     except ProviderError as exc:
         console.print(f"[red]error:[/red] {exc}")
         return 1
@@ -673,6 +826,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     command = getattr(args, "command", None)
     if command == "list":
         return cmd_list(args, console)
+    if command == "models":
+        return cmd_models(args, console)
     if command == "tasks":
         return cmd_tasks(args, console)
     if command == "doctor":

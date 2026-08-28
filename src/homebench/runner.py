@@ -11,7 +11,7 @@ from __future__ import annotations
 import statistics
 import time
 from dataclasses import dataclass, field
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from .metrics.memory import RSSSampler
 from .models import (
@@ -68,6 +68,11 @@ class RunConfig:
     quick: bool = True              # default to the fast curated subset
     use_cache: bool = True          # reuse cached deterministic responses
     refresh_cache: bool = False     # ignore existing cache, overwrite it
+    # Effective load parameters per model, as resolved by the lifecycle
+    # module (model name -> the argv the backend actually ran with). Saved
+    # with the run so two runs of the same model with different -ngl are
+    # distinguishable in the history (MLC-09).
+    load_params: Optional[Dict[str, List[str]]] = None
 
     def to_dict(self) -> dict:
         return {
@@ -84,6 +89,7 @@ class RunConfig:
             "run_quality": self.run_quality,
             "run_speed": self.run_speed,
             "quick": self.quick,
+            "load_params": {k: list(v) for k, v in (self.load_params or {}).items()},
         }
 
 
@@ -109,10 +115,19 @@ class Runner:
         provider: Provider,
         config: Optional[RunConfig] = None,
         judge: Optional[LLMJudge] = None,
+        prepare_model: Optional[Callable[[ModelInfo], Optional[List[str]]]] = None,
     ):
         self.provider = provider
         self.config = config or RunConfig()
         self.judge = judge
+        # Called once per model, at the start of that model's run, before
+        # warmup. Used to make the target the only resident model on a
+        # llama.cpp router (MLC-01/MLC-03) and to return the argv it actually
+        # loaded with (MLC-09). None on every non-router path. A ProviderError
+        # raised here fails only the current model, like any other per-model
+        # failure (MLC-11).
+        self.prepare_model = prepare_model
+        self._prepared_params: Dict[str, List[str]] = {}
         self.cache = None
         if self.config.use_cache:
             from .cache import ResponseCache
@@ -125,12 +140,17 @@ class Runner:
             config=self.config.to_dict(),
             environment=self._capture_environment(),
         )
+        self._prepared_params = {}
         _emit(observer, EV_RUN_START, models=[m.name for m in models])
         for model in models:
             _emit(observer, EV_MODEL_START, model=model.name)
             report = self._run_model(model, observer)
             result.reports.append(report)
             _emit(observer, EV_MODEL_DONE, report=report)
+        if self._prepared_params:
+            merged = dict(result.config.get("load_params") or {})
+            merged.update(self._prepared_params)
+            result.config["load_params"] = merged
         if self.cache is not None:
             self.cache.save()
         result.finished_at = time.time()
@@ -159,6 +179,12 @@ class Runner:
         if sampler is not None:
             sampler.__enter__()
         try:
+            if self.prepare_model is not None:
+                _emit(observer, EV_PHASE, model=model.name, phase="prepare")
+                effective = self.prepare_model(model)
+                if effective is not None:
+                    self._prepared_params[model.name] = list(effective)
+
             if cfg.warmup:
                 _emit(observer, EV_PHASE, model=model.name, phase="warmup")
                 self.provider.warmup(model.name, timeout=cfg.timeout)
@@ -173,6 +199,11 @@ class Runner:
 
             if cfg.unload_between:
                 self.provider.unload(model.name)
+                unload_err = getattr(self.provider, "last_unload_error", None)
+                if unload_err:
+                    report.warnings.append(f"unload failed: {unload_err}")
+                    _emit(observer, EV_PHASE, model=model.name,
+                          phase="warning", note=f"unload failed: {unload_err}")
         except ProviderError as exc:
             report.error = str(exc)
             _emit(observer, EV_PHASE, model=model.name, phase="error", note=str(exc))

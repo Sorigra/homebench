@@ -39,6 +39,52 @@ def _latest_pypi(timeout: float = 3.0) -> Optional[str]:
         return None
 
 
+ROUTER_CHECK = "llama.cpp router"
+
+
+def _router_expected(reachable_names: List[str]) -> bool:
+    """Only diagnose a router when a llama.cpp host is actually in play.
+
+    Either the user pointed at one with ``LLAMACPP_HOST``, or auto-detection
+    already found llama.cpp reachable. Otherwise ``doctor`` says nothing about
+    routers, so nothing changes for people running only Ollama or LM Studio.
+    """
+    return bool(os.environ.get("LLAMACPP_HOST")) or "llamacpp" in reachable_names
+
+
+def router_checks(host: Optional[str] = None) -> List[Check]:
+    """Reachability and authentication for one llama.cpp router host (MLC-12)."""
+    from .lifecycle.router import LlamaRouterClient
+    from .providers.base import ProviderError
+
+    client = LlamaRouterClient(host=host)
+    try:
+        info = client.props()
+    except ProviderError as exc:
+        detail = str(exc)          # already names the host; never the key
+        if "authentication" in detail.lower():
+            detail += " — check the LLAMACPP_API_KEY value"
+        return [Check(ROUTER_CHECK, "fail", detail)]
+
+    if info.role != "router":
+        return [Check(ROUTER_CHECK, "info",
+                      f"{client.host} is a llama.cpp server, not a router — "
+                      "model lifecycle is not available there")]
+
+    try:
+        models = client.list_models()
+    except ProviderError as exc:
+        return [Check(ROUTER_CHECK, "fail", str(exc))]
+
+    resident = [m.id for m in models if m.status == "loaded"]
+    detail = (f"{client.host} · build {info.build_info or '?'} · "
+              f"{len(models)} model(s) · {len(resident)} resident")
+    if resident:
+        detail += f" ({', '.join(resident)})"
+    detail += f" · max {info.max_instances} loaded at once"
+    return [Check(ROUTER_CHECK, "ok", detail)]
+
+
 def run_checks(home: Optional[str] = None, check_pypi: bool = True) -> List[Check]:
     from . import __version__
     from .report import fmt_bytes
@@ -89,6 +135,10 @@ def run_checks(home: Optional[str] = None, check_pypi: bool = True) -> List[Chec
         checks.append(Check("Providers", "fail",
                             "none reachable — start one (e.g. `ollama serve`), "
                             "then `ollama pull llama3.2`"))
+
+    # llama.cpp router lifecycle
+    if _router_expected([name for name, _n in reachable]):
+        checks.extend(router_checks())
 
     # Home / cache / history
     from .history import default_home, list_runs

@@ -1,0 +1,154 @@
+{
+  "schema": 1,
+  "promote_threshold": 2,
+  "window_days": 45,
+  "quarantine_threshold": 2,
+  "next_id": 9,
+  "lessons": [
+    {
+      "id": "L-001",
+      "key": "surviving_mutant::exercise list driven flows with more than one item so an implementation that only handles the first element cannot pass",
+      "text": "Exercise list-driven flows with more than one item, so an implementation that only handles the first element cannot pass.",
+      "signal": "surviving_mutant",
+      "scope": "cli",
+      "status": "candidate",
+      "features": [
+        "model-lifecycle"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation.md sensor M16 (src/homebench/cli.py:326) (cli)",
+        "validation.md iteration-2 sensor M28a (src/homebench/cli.py:349) (cli)"
+      ],
+      "created": "2026-08-28T05:53:27Z",
+      "last_seen": "2026-08-28T08:44:17Z"
+    },
+    {
+      "id": "L-002",
+      "key": "ac_gap::a test that is skipped by default is zero evidence never mark a requirement covered by it",
+      "text": "A test that is skipped by default is zero evidence; never mark a requirement covered by it.",
+      "signal": "ac_gap",
+      "scope": "tests",
+      "status": "candidate",
+      "features": [
+        "model-lifecycle"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "MLC-15 - tests/test_live_router.py:24-27 (skipped) (tests)"
+      ],
+      "created": "2026-08-28T05:53:27Z",
+      "last_seen": "2026-08-28T05:53:27Z"
+    },
+    {
+      "id": "L-003",
+      "key": "ac_gap::give every listed edge case its own task and test or move it to out of scope explicitly",
+      "text": "Give every listed edge case its own task and test, or move it to Out of Scope explicitly.",
+      "signal": "ac_gap",
+      "scope": "specs",
+      "status": "candidate",
+      "features": [
+        "model-lifecycle"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "spec.md Edge Cases: models-max retry, in-flight request warning (specs)"
+      ],
+      "created": "2026-08-28T05:53:27Z",
+      "last_seen": "2026-08-28T05:53:27Z"
+    },
+    {
+      "id": "L-004",
+      "key": "ac_gap::assert inherited behaviour a new feature depends on pre existing code with no test counts as uncovered",
+      "text": "Assert inherited behaviour a new feature depends on; pre-existing code with no test counts as uncovered.",
+      "signal": "ac_gap",
+      "scope": "tests",
+      "status": "candidate",
+      "features": [
+        "model-lifecycle"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "MLC-11 - src/homebench/runner.py:182-184 (tests)"
+      ],
+      "created": "2026-08-28T05:53:27Z",
+      "last_seen": "2026-08-28T05:53:27Z"
+    },
+    {
+      "id": "L-005",
+      "key": "spec_precision_gap::state where a recorded failure must surface otherwise record the failure is satisfied by a field nothing reads",
+      "text": "State where a recorded failure must surface; otherwise 'record the failure' is satisfied by a field nothing reads.",
+      "signal": "spec_precision_gap",
+      "scope": "specs",
+      "status": "candidate",
+      "features": [
+        "model-lifecycle"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "MLC-14 AC2 - src/homebench/providers/llamacpp.py:63 (specs)"
+      ],
+      "created": "2026-08-28T05:53:27Z",
+      "last_seen": "2026-08-28T05:53:27Z"
+    },
+    {
+      "id": "L-006",
+      "key": "ac_gap::wire every branch of a resolution chain to a real caller a tier reachable only from tests is dead code",
+      "text": "Wire every branch of a resolution chain to a real caller; a tier reachable only from tests is dead code.",
+      "signal": "ac_gap",
+      "scope": "cli",
+      "status": "candidate",
+      "features": [
+        "model-lifecycle"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "P2 AC5 heuristic tier - src/homebench/cli.py:328 (cli)"
+      ],
+      "created": "2026-08-28T05:53:27Z",
+      "last_seen": "2026-08-28T05:53:27Z"
+    },
+    {
+      "id": "L-007",
+      "key": "surviving_mutant::assert the order of pipeline steps not only that each step ran a test that disables a neighbouring step cannot detect a reordering",
+      "text": "Assert the order of pipeline steps, not only that each step ran; a test that disables a neighbouring step cannot detect a reordering.",
+      "signal": "surviving_mutant",
+      "scope": "runner",
+      "status": "candidate",
+      "features": [
+        "model-lifecycle"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "validation.md iteration-2 sensor M31 (src/homebench/runner.py:182-190) (runner)"
+      ],
+      "created": "2026-08-28T08:44:17Z",
+      "last_seen": "2026-08-28T08:44:17Z"
+    },
+    {
+      "id": "L-008",
+      "key": "ac_gap::when a fix narrows an existing acceptance criterion record it as a decision and amend the criterion a code comment is not a decision",
+      "text": "When a fix narrows an existing acceptance criterion, record it as a decision and amend the criterion; a code comment is not a decision.",
+      "signal": "ac_gap",
+      "scope": "specs",
+      "status": "candidate",
+      "features": [
+        "model-lifecycle"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "MLC-08 AC1 - src/homebench/cli.py:330-343,355 (Gap 3) (specs)"
+      ],
+      "created": "2026-08-28T08:44:17Z",
+      "last_seen": "2026-08-28T08:44:17Z"
+    }
+  ]
+}
