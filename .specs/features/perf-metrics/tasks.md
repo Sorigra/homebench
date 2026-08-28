@@ -345,7 +345,7 @@ T17
 
 ---
 
-### T12: `leaderboard_rows()` e a tabela Rich
+### T12: `leaderboard_rows()` e a tabela Rich ✅ Complete
 
 **What**: helper único que expande `ModelReport` em linhas (uma por profundidade) e a tabela Rich do relatório final consumindo-o, com colunas Depth / Prefill / Decode.
 **Where**: `src/homebench/report.py`
@@ -356,12 +356,12 @@ T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Modelo com 3 profundidades gera 3 linhas; modelo sem `depth_results` gera 1 linha sem profundidade
-- [ ] `prefill_tps is None` renderiza `–`, nunca `0.00`
-- [ ] Ordenação do leaderboard usa o decode da menor profundidade
-- [ ] Profundidade pulada aparece com o motivo
-- [ ] Gate check passes: `.venv/bin/python -m pytest -q tests/test_reports.py`
-- [ ] Test count: 431 + 6 = 437 testes passam
+- [x] Modelo com 3 profundidades gera 3 linhas; modelo sem `depth_results` gera 1 linha sem profundidade
+- [x] `prefill_tps is None` renderiza `–`, nunca `0.00`
+- [x] Ordenação do leaderboard usa o decode da menor profundidade
+- [x] Profundidade pulada aparece com o motivo
+- [x] Gate check passes: `.venv/bin/python -m pytest -q tests/test_reports.py`
+- [x] Test count: 431 + 6 = 437 testes passam
 
 **Tests**: unit
 **Gate**: quick

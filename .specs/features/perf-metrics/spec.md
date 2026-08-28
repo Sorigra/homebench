@@ -164,7 +164,7 @@ já salvos em `~/.homebench/runs/`.
 | PERF-06 | P2: prefill vs decode | T5 | Done |
 | PERF-07 | P2: prefill vs decode | T5 | Done |
 | PERF-08 | P2: prefill vs decode | T5 | Done |
-| PERF-09 | P2: prefill vs decode | T12 | Pending |
+| PERF-09 | P2: prefill vs decode | T12 | Done |
 | PERF-10 | P3: varredura de profundidade | T9, T10 | Done |
 | PERF-11 | P3: varredura de profundidade | T3, T16 | Pending |
 | PERF-12 | P3: varredura de profundidade | T7, T8 | Done |
