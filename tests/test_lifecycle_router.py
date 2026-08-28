@@ -1,9 +1,12 @@
 """LlamaRouterClient - HTTP client for the llama.cpp router.
 
 All tests run offline via pytest-httpx. Requirements exercised so far:
-MLC-07 (auth rejected, key never echoed), MLC-10/MLC-11 (unreachable),
-AD-004 (positive router detection).
+MLC-02 (missing model cited), MLC-06/MLC-13 (load/unload, 404 = missing file,
+router message propagated), MLC-07 (auth rejected, key never echoed),
+MLC-10/MLC-11 (unreachable), AD-004 (positive router detection).
 """
+
+import json
 
 import httpx
 import pytest
@@ -227,3 +230,84 @@ def test_list_models_skips_entries_without_id(httpx_mock):
     )
     models = _client().list_models()
     assert [m.id for m in models] == ["real"]
+
+
+# =====================================================================
+# T4: load() and unload()
+# =====================================================================
+def _sent_body(httpx_mock):
+    reqs = httpx_mock.get_requests()
+    assert len(reqs) == 1
+    return json.loads(reqs[0].content)
+
+
+def test_load_sends_model_only_when_no_extra_args(httpx_mock):
+    httpx_mock.add_response(url=f"{HOST}/models/load", json={"success": True})
+    _client().load("qwen35-4b")
+    assert _sent_body(httpx_mock) == {"model": "qwen35-4b"}
+
+
+def test_load_includes_extra_args_when_given(httpx_mock):
+    httpx_mock.add_response(url=f"{HOST}/models/load", json={"success": True})
+    _client().load("qwen35-4b", extra_args=["-ngl", "20", "-fa"])
+    assert _sent_body(httpx_mock) == {
+        "model": "qwen35-4b",
+        "extra_args": ["-ngl", "20", "-fa"],
+    }
+
+
+def test_load_omits_extra_args_when_empty_list(httpx_mock):
+    httpx_mock.add_response(url=f"{HOST}/models/load", json={"success": True})
+    _client().load("qwen35-4b", extra_args=[])
+    assert _sent_body(httpx_mock) == {"model": "qwen35-4b"}
+
+
+def test_unload_sends_model(httpx_mock):
+    httpx_mock.add_response(url=f"{HOST}/models/unload", json={"success": True})
+    _client().unload("qwen35-4b")
+    assert _sent_body(httpx_mock) == {"model": "qwen35-4b"}
+
+
+def test_load_404_is_missing_model_file_citing_id_not_route(httpx_mock):
+    httpx_mock.add_response(url=f"{HOST}/models/load", status_code=404, text="File Not Found")
+    with pytest.raises(ProviderError) as exc:
+        _client().load("ghost-model")
+    msg = str(exc.value).lower()
+    assert "ghost-model" in str(exc.value)
+    # interpreted as a missing model *file*, never as a missing route/endpoint
+    assert "model file not found" in msg
+    assert "route not found" not in msg and "no such endpoint" not in msg
+
+
+def test_load_400_unknown_model_cites_id_and_propagates_router_message(httpx_mock):
+    httpx_mock.add_response(
+        url=f"{HOST}/models/load",
+        status_code=400,
+        json={"error": {"message": "unknown model id: ghost-model", "type": "invalid_request_error"}},
+    )
+    with pytest.raises(ProviderError) as exc:
+        _client().load("ghost-model")
+    text = str(exc.value)
+    assert "ghost-model" in text
+    assert "unknown model id: ghost-model" in text  # router's own words, unmodified
+
+
+def test_load_401_raises_auth_error_without_key(httpx_mock):
+    httpx_mock.add_response(url=f"{HOST}/models/load", status_code=401)
+    with pytest.raises(ProviderError) as exc:
+        _client(api_key=SECRET_KEY).load("m")
+    assert SECRET_KEY not in str(exc.value)
+
+
+def test_unload_404_is_missing_model_file_citing_id(httpx_mock):
+    httpx_mock.add_response(url=f"{HOST}/models/unload", status_code=404)
+    with pytest.raises(ProviderError) as exc:
+        _client().unload("ghost-model")
+    assert "ghost-model" in str(exc.value)
+
+
+def test_load_network_failure_cites_host(httpx_mock):
+    httpx_mock.add_exception(httpx.ConnectError("refused"))
+    with pytest.raises(ProviderError) as exc:
+        _client().load("m")
+    assert HOST in str(exc.value)

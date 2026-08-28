@@ -20,6 +20,7 @@ from .models import ModelState, RouterInfo
 
 _PROPS_TIMEOUT = 10.0
 _LIST_TIMEOUT = 10.0
+_MUTATION_TIMEOUT = 60.0
 
 
 def normalize_host(host: str, default: str) -> str:
@@ -108,3 +109,56 @@ class LlamaRouterClient:
     def loaded_models(self) -> List[ModelState]:
         """Just the models currently ``loaded``."""
         return [m for m in self.list_models() if m.status == "loaded"]
+
+    # ------------------------------------------------------------------
+    def load(self, model: str, extra_args: Optional[List[str]] = None) -> None:
+        """``POST /models/load``. ``extra_args`` is included only when non-empty."""
+        payload: Dict[str, Any] = {"model": model}
+        if extra_args:
+            payload["extra_args"] = list(extra_args)
+        self._post_mutation("/models/load", payload, model)
+
+    def unload(self, model: str) -> None:
+        """``POST /models/unload``."""
+        self._post_mutation("/models/unload", {"model": model}, model)
+
+    def _post_mutation(self, path: str, payload: Dict[str, Any], model: str) -> None:
+        try:
+            r = httpx.post(
+                f"{self.host}{path}",
+                json=payload,
+                headers=self._headers(),
+                timeout=_MUTATION_TIMEOUT,
+            )
+        except httpx.HTTPError as exc:
+            raise self._unreachable(exc)
+        if r.status_code in (401, 403):
+            raise self._auth_error()
+        if r.status_code == 404:
+            # The route exists on this build; a 404 here means the model *file*
+            # is missing, not that the endpoint is absent (AD-001 correction).
+            raise ProviderError(
+                f"Model file not found for {model!r} on router at {self.host}"
+            )
+        if r.status_code >= 400:
+            # propagate the router's own message unchanged (MLC-13)
+            raise ProviderError(
+                f"Router rejected {path} for {model!r}: {_router_message(r)}"
+            )
+
+
+def _router_message(r: httpx.Response) -> str:
+    """The router's own error message, unmodified, for propagation (MLC-13)."""
+    try:
+        body = r.json()
+    except ValueError:
+        return r.text.strip() or "HTTP {}".format(r.status_code)
+    if isinstance(body, dict):
+        err = body.get("error")
+        if isinstance(err, dict) and err.get("message"):
+            return str(err["message"])
+        if isinstance(err, str) and err:
+            return err
+        if body.get("message"):
+            return str(body["message"])
+    return r.text.strip() or "HTTP {}".format(r.status_code)

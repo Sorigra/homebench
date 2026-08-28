@@ -189,13 +189,13 @@ T15 → T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `load(model, extra_args=None)` envia `POST /models/load` com `{"model": id}` e inclui `extra_args` só quando não vazio
-- [ ] `unload(model)` envia `POST /models/unload` com `{"model": id}`
-- [ ] `404 File Not Found` vira `ProviderError` de **arquivo de modelo ausente**, citando o id — nunca "rota inexistente"
-- [ ] Erro do router é propagado com a mensagem original, sem reinterpretação
-- [ ] Testes cobrem: sucesso, 404-arquivo, 400-modelo-inexistente, `extra_args` presente e ausente
-- [ ] Gate: `.venv/bin/python -m pytest -q`
-- [ ] Total ≥ 162 + 26 testes passam
+- [x] `load(model, extra_args=None)` envia `POST /models/load` com `{"model": id}` e inclui `extra_args` só quando não vazio
+- [x] `unload(model)` envia `POST /models/unload` com `{"model": id}`
+- [x] `404 File Not Found` vira `ProviderError` de **arquivo de modelo ausente**, citando o id — nunca "rota inexistente"
+- [x] Erro do router é propagado com a mensagem original, sem reinterpretação
+- [x] Testes cobrem: sucesso, 404-arquivo, 400-modelo-inexistente, `extra_args` presente e ausente
+- [x] Gate: `.venv/bin/python -m pytest -q`
+- [x] Total ≥ 162 + 26 testes passam — 205 passam
 
 **Tests**: unit
 **Gate**: quick
