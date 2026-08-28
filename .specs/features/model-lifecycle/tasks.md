@@ -238,12 +238,12 @@ T15 → T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] `load_overrides(path=None)` lê `$HOMEBENCH_HOME/load-params.json` (TD-07)
-- [ ] Arquivo ausente devolve `{}` sem erro
-- [ ] JSON malformado devolve `{}` e sinaliza aviso — **não** levanta
-- [ ] Testes usam `tmp_path`; `conftest.py` já isola `HOMEBENCH_HOME`
-- [ ] Gate: `.venv/bin/python -m pytest -q`
-- [ ] Total ≥ 162 + 37 testes passam
+- [x] `load_overrides(path=None)` lê `$HOMEBENCH_HOME/load-params.json` (TD-07)
+- [x] Arquivo ausente devolve `{}` sem erro
+- [x] JSON malformado devolve `{}` e sinaliza aviso — **não** levanta
+- [~] Testes usam `tmp_path`; `conftest.py` já isola `HOMEBENCH_HOME` — não há `conftest.py` no repo; testes usam `monkeypatch.setenv("HOMEBENCH_HOME", ...)` como `test_history.py:106`
+- [x] Gate: `.venv/bin/python -m pytest -q`
+- [x] Total ≥ 162 + 37 testes passam — 217 passam
 
 **Tests**: unit
 **Gate**: quick
