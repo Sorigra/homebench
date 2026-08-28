@@ -154,62 +154,63 @@ descarga individual.
 
 ## Handoff
 
-**Onde parou:** feature `perf-metrics` em **Execute**, lote 1 de 3 em andamento.
+**Onde parou:** feature `perf-metrics` **implementada e validada** em 2026-08-28.
+`validation.md` → **PASS**; `validate_state.py` → 0 erros. Falta só o **teste de aceitação ao
+vivo** contra o router e a decisão de merge/release.
 
-**Branch:** `feat/perf-metrics` (criada a partir de `main` em `d530695`). Planejamento commitado
-em `0ee6812`. Nada enviado para remoto; `git push` segue exigindo autorização na hora.
+**Branch:** `feat/perf-metrics`, 20 commits à frente de `main` (`d530695`). **Nada enviado para
+remoto.** `git push` continua exigindo autorização explícita na hora.
 
-**Feature anterior:** `model-lifecycle` está mesclada e lançada como `v0.12.0` — ver o histórico
-de decisões acima. Esta feature retoma a dívida registrada lá como **MLC-16**.
+**Testes:** 378 → **454 coletados, 449 passam, 5 pulados** (`tests/test_live_router.py`, só com
+`HOMEBENCH_LIVE=1`, nunca no CI). Gate de build verde (`twine check` PASSOU nos dois artefatos).
 
-### O que motivou a feature
+### O que a feature entrega
 
-Teste ao vivo do usuário com `homebench run --provider llamacpp --host http://127.0.0.1:8080
---no-quality -m Ornith-1.5-35B-A3B-Q8` produziu um relatório **zerado** com status `done` e sem
-erro. Causa: o modelo é de raciocínio e emite 100% dos tokens em `reasoning_content`, que
-`openai_compat.py` descarta — `first_token_at` nunca é setado, `eval_s` fica 0 e o guard
-`if speed.eval_s > 0` impede o cálculo. Valor real medido na mão: **54.03 tok/s, TTFT 129 ms**.
+1. `reasoning_content` conta no timing — o defeito que zerava o tok/s de modelo de raciocínio.
+2. Prefill e decode separados, vindos do `timings` server-side quando existe; `prefill_tps` fica
+   `None` (renderizado `–`) quando o backend não informa, nunca um zero falso.
+3. Varredura de profundidade `0/8192/32768` ligada por padrão, `--depths` para mudar; uma linha
+   de leaderboard por (modelo, profundidade) em Rich, Markdown, HTML, plainui e TUI.
+4. Compatibilidade preservada: `score.py`, `history.py` e `diff` não foram tocados e seguem lendo
+   `speed.tokens_per_sec`, que por contrato é a profundidade mais rasa medida.
 
-### Escopo (17 requisitos, PERF-01..17)
+### Validação
 
-1. Contar `reasoning_content` no timing (graders continuam recebendo só `content`).
-2. Separar prefill e decode, usando o `timings` server-side quando houver.
-3. Varredura de profundidade de contexto: `0/8192/32768` **ligada por padrão**, `--depths` para mudar.
+Feita **inline pelo orquestrador**, não por Verifier subagente — decisão do usuário por
+orçamento. 17/17 ACs com evidência `file:line`. Sensor de discriminação: 6 mutações, 6 mortas,
+0 sobreviventes (uma sétima descartada como mutante equivalente, justificada no relatório).
+Ressalva registrada: a spec e a validação têm o mesmo autor, então erro de origem na spec teria
+menor chance de ser pego.
 
-### Decisões do usuário nesta fase
+### Próximo passo — teste de aceitação ao vivo (não feito)
 
-- Layout: **uma linha por (modelo, profundidade)**, não colunas por profundidade.
-- Varredura **ligada por padrão**, mesmo com o custo de tempo (avisado e reafirmado).
-- Leaderboard e score `Value` ordenam pelo **decode em profundidade 0**.
-- Execução em **3 lotes + Verifier** = 4 subagentes; o usuário abriu exceção ao seu limite de 3.
+```bash
+export LLAMACPP_API_KEY="$(cat ~/llm-server/llama/api-key.txt)"
+.venv/bin/homebench run --provider llamacpp --host http://127.0.0.1:8080 \
+  --no-quality -m gemma4-e2b --force-unload --no-tui
+```
 
-### Fatos do ambiente verificados ao vivo (2026-08-28, build b10664)
+Esperado, das medições feitas antes da implementação (prefill / decode tok/s):
+0 → 2714 / 95.1 · 8k → 2709 / 83.3 · 32k → 1805 / 73.0. E `-m Ornith-1.5-35B-A3B-Q8 --depths 0`
+deve dar ≈54 tok/s com TTFT ≈129 ms, onde antes dava `0.00`.
 
-- O stream OAI já devolve `timings{prompt_per_second, predicted_per_second, prompt_n, prompt_ms, cache_n}`.
-- `POST /tokenize` existe e devolve `{"tokens":[int]}`; 400 quando o modelo não está residente.
-- `cache_prompt:false` zera `cache_n`. Sem isso o prefill da 2ª medição do mesmo prompt mente
-  (2 540 vs 1 478 tok/s).
-- Profundidade não precisa de `-c`: 32k e 64k medidos de fato em `gemma4-e2b`.
-- Tokenização quase-linear com offset de BOS: unidade de filler 1x = 11 tokens, 100x = 1001.
-- Curva de referência `gemma4-e2b` (prefill / decode tok/s): 0 → 2714/95.1 · 8k → 2709/83.3 ·
-  32k → 1805/73.0 · 64k → 1222/62.1.
-- **Estado do router restaurado** ao fim das sondagens: os 17 modelos ficaram `unloaded`.
+**Atenção:** a varredura padrão é lenta num modelo de 35B (o prefill de 32k domina). Use
+`--depths 0` para o teste rápido.
 
-### Plano de execução
+### Depois disso
 
-| Lote | Fases | Tarefas | Tier | Status |
-| --- | --- | --- | --- | --- |
-| 1 | 1-2 | T1-T7 (dados + provider) | Opus | em andamento |
-| 2 | 3 | T8-T11 (medição + runner) | Opus | pendente |
-| 3 | 4-5 | T12-T17 (saídas, CLI, docs) | Sonnet | pendente |
-| Verifier | - | validação independente | Opus | pendente |
+Merge em `main` + bump de versão para **0.13.0** em `pyproject.toml` **e**
+`src/homebench/__init__.py` (os dois, per `AGENTS.md`), tag `v0.13.0`. Nada disso feito ainda.
 
-Linha de base de testes: **378 coletados** (373 passam, 5 pulados). Alvo ao fim: 454.
+### Regra nova desta sessão
+
+`AGENTS.md § Cost discipline` (commit `56641c8`): Sonnet é o default, processo dimensionado à
+mudança, máximo 3 subagentes incluindo Verifier, e **declarar o custo esperado antes de
+despachar**. O usuário estourou ~85% da assinatura nesta feature; custo é requisito.
 
 ### Autorizações e proibições permanentes
 
 - **Proibido:** iniciar, parar ou reiniciar qualquer container (AD-001).
 - **Proibido sem autorização explícita na hora:** `git push` e qualquer operação remota.
 - Chave da API em `~/llm-server/llama/api-key.txt` — **nunca logar nem commitar**.
-- Os workers desta feature foram instruídos a **não** contatar o router ao vivo nem carregar
-  modelo: todos os fatos de wire de que precisam estão no payload deles.
+- Estado do router ao fim desta sessão: **todos os 17 modelos `unloaded`**, como estava antes.
