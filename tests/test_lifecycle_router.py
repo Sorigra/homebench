@@ -311,3 +311,87 @@ def test_load_network_failure_cites_host(httpx_mock):
     with pytest.raises(ProviderError) as exc:
         _client().load("m")
     assert HOST in str(exc.value)
+
+
+# =====================================================================
+# T5: wait_until_loaded()
+# =====================================================================
+def _models_response(httpx_mock, *statuses):
+    for value in statuses:
+        httpx_mock.add_response(
+            url=f"{HOST}/v1/models",
+            json={"data": [_entry("qwen35-4b", value, 99)]},
+        )
+
+
+class _FakeClock:
+    """Returns the queued values in order; the last value repeats."""
+
+    def __init__(self, values):
+        self._values = list(values)
+
+    def __call__(self):
+        return self._values.pop(0) if len(self._values) > 1 else self._values[0]
+
+
+def test_wait_returns_immediately_when_already_loaded(httpx_mock):
+    _models_response(httpx_mock, "loaded")
+    slept = []
+    _client().wait_until_loaded(
+        "qwen35-4b", now=_FakeClock([0.0]), sleep=slept.append
+    )
+    assert slept == []  # no polling needed
+    assert len(httpx_mock.get_requests()) == 1
+
+
+def test_wait_polls_until_loaded_without_real_sleep(httpx_mock):
+    _models_response(httpx_mock, "loading", "loaded")
+    slept = []
+    _client().wait_until_loaded(
+        "qwen35-4b", timeout=300.0, now=_FakeClock([0.0]), sleep=slept.append,
+        poll_interval=1.0,
+    )
+    assert slept == [1.0]  # exactly one poll gap, and it was the injected sleep
+    assert len(httpx_mock.get_requests()) == 2
+
+
+def test_wait_times_out_with_providererror(httpx_mock):
+    _models_response(httpx_mock, "loading", "loading")
+    with pytest.raises(ProviderError) as exc:
+        _client().wait_until_loaded(
+            "qwen35-4b", timeout=300.0,
+            now=_FakeClock([0.0, 0.0, 9999.0]), sleep=lambda _s: None,
+        )
+    msg = str(exc.value).lower()
+    assert "300" in msg and ("timed out" in msg or "timeout" in msg)
+    assert "qwen35-4b" in str(exc.value)
+
+
+def test_wait_times_out_when_model_missing_from_list(httpx_mock):
+    httpx_mock.add_response(url=f"{HOST}/v1/models", json={"data": []})
+    httpx_mock.add_response(url=f"{HOST}/v1/models", json={"data": []})
+    with pytest.raises(ProviderError):
+        _client().wait_until_loaded(
+            "qwen35-4b", timeout=300.0,
+            now=_FakeClock([0.0, 0.0, 9999.0]), sleep=lambda _s: None,
+        )
+
+
+def test_wait_default_timeout_is_300_seconds(httpx_mock):
+    # deadline = 1000 + 300; a clock reading 1301 on the first check times out
+    _models_response(httpx_mock, "loading")
+    with pytest.raises(ProviderError) as exc:
+        _client().wait_until_loaded(
+            "qwen35-4b", now=_FakeClock([1000.0, 1301.0]), sleep=lambda _s: None,
+        )
+    assert "300" in str(exc.value)
+
+
+def test_wait_default_timeout_not_tripped_just_before_300(httpx_mock):
+    # a clock reading 1299 is still inside the 300 s window -> keeps polling
+    _models_response(httpx_mock, "loading", "loaded")
+    slept = []
+    _client().wait_until_loaded(
+        "qwen35-4b", now=_FakeClock([1000.0, 1299.0, 1299.0]), sleep=slept.append,
+    )
+    assert slept == [1.0]

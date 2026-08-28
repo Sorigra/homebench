@@ -11,6 +11,7 @@ tiny host-normaliser is the same pattern ``providers/ollama.py`` already uses.
 from __future__ import annotations
 
 import os
+import time
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -21,6 +22,8 @@ from .models import ModelState, RouterInfo
 _PROPS_TIMEOUT = 10.0
 _LIST_TIMEOUT = 10.0
 _MUTATION_TIMEOUT = 60.0
+_LOAD_TIMEOUT = 300.0   # TD-06: aligned with RunConfig.timeout
+_POLL_INTERVAL = 1.0
 
 
 def normalize_host(host: str, default: str) -> str:
@@ -145,6 +148,34 @@ class LlamaRouterClient:
             raise ProviderError(
                 f"Router rejected {path} for {model!r}: {_router_message(r)}"
             )
+
+    # ------------------------------------------------------------------
+    def wait_until_loaded(
+        self,
+        model: str,
+        timeout: float = _LOAD_TIMEOUT,
+        *,
+        now=time.monotonic,
+        sleep=time.sleep,
+        poll_interval: float = _POLL_INTERVAL,
+    ) -> None:
+        """Poll ``GET /v1/models`` until ``model`` is ``loaded``.
+
+        Raises :class:`ProviderError` if ``timeout`` seconds pass first (default
+        300 s, TD-06). ``now`` and ``sleep`` are injectable so the timeout test
+        does not really wait.
+        """
+        deadline = now() + timeout
+        while True:
+            state = next((m for m in self.list_models() if m.id == model), None)
+            if state is not None and state.status == "loaded":
+                return
+            if now() >= deadline:
+                raise ProviderError(
+                    f"Timed out after {timeout:.0f}s waiting for {model!r} "
+                    f"to load on router at {self.host}"
+                )
+            sleep(poll_interval)
 
 
 def _router_message(r: httpx.Response) -> str:

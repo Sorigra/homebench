@@ -214,12 +214,12 @@ T15 → T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Retorna assim que o modelo fica `loaded`
-- [ ] Levanta `ProviderError` de timeout após `timeout` segundos (default 300, TD-06)
-- [ ] O relógio é injetável para que o teste de timeout não durma de verdade
-- [ ] Testes cobrem: já loaded, loading→loaded, timeout, modelo some da lista
-- [ ] Gate: `.venv/bin/python -m pytest -q`
-- [ ] Total ≥ 162 + 32 testes passam
+- [x] Retorna assim que o modelo fica `loaded`
+- [x] Levanta `ProviderError` de timeout após `timeout` segundos (default 300, TD-06)
+- [x] O relógio é injetável para que o teste de timeout não durma de verdade
+- [x] Testes cobrem: já loaded, loading→loaded, timeout, modelo some da lista
+- [x] Gate: `.venv/bin/python -m pytest -q`
+- [x] Total ≥ 162 + 32 testes passam — 211 passam
 
 **Tests**: unit
 **Gate**: quick
