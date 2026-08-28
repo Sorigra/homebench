@@ -12,7 +12,7 @@ injected -- so the sweep stays testable without a network.
 
 from __future__ import annotations
 
-from typing import List
+from typing import Callable, List, Optional, Tuple
 
 
 def parse_depths(spec: str) -> List[int]:
@@ -39,3 +39,93 @@ def parse_depths(spec: str) -> List[int]:
             raise ValueError(f"invalid context depth {part!r}: must not be negative")
         depths.append(value)
     return depths or [0]
+
+
+# The filler unit the depth prompts are built from. Measured against the live
+# router: one repetition is 11 tokens, one hundred are 1001 -- 10 tokens per
+# unit plus a single BOS token that must not be multiplied by the repeat
+# count. ``_PAD_WORD`` is the fine adjustment, roughly one token each.
+_FILLER_UNIT = "The quick brown fox jumps over the lazy dog. "
+_FILLER_WORDS = 9
+_PAD_WORD = "dog "
+#: second calibration point; far enough from 1 that the BOS offset separates
+#: cleanly from the per-unit slope
+_PROBE_UNITS = 100
+#: cap on the fine-adjustment round trips, so a hostile tokenizer cannot turn
+#: prompt building into an unbounded loop
+_MAX_REFINEMENTS = 8
+#: fallback ratio when no tokenizer is available. The depth that actually gets
+#: recorded comes from the server's ``prompt_n`` afterwards, so this only has
+#: to be in the right neighbourhood.
+_WORDS_PER_TOKEN = 0.75
+
+
+def build_context_prompt(
+    target: int,
+    tokenize: Optional[Callable[[str], Optional[int]]] = None,
+    *,
+    base_prompt: str,
+) -> Tuple[str, Optional[int]]:
+    """Synthesise a prompt roughly ``target`` tokens deep.
+
+    Returns the prompt text and its token count. The count is ``None`` when no
+    tokenizer was available, which means the text is an estimate -- never a
+    guess dressed up as a measurement.
+
+    ``target <= 0`` is the shallow case and returns ``base_prompt`` untouched:
+    depth 0 measures the model on the plain speed prompt, not on filler.
+
+    ``base_prompt`` is passed in rather than imported so this module stays
+    free of any dependency on the runner, and ``tokenize`` is injected so the
+    module never opens a connection of its own.
+    """
+    if target <= 0:
+        return base_prompt, None
+
+    def synth(units: int, pads: int) -> str:
+        return _FILLER_UNIT * units + _PAD_WORD * pads + "\n\n" + base_prompt
+
+    if tokenize is not None:
+        fitted = _fit_to_target(target, tokenize, synth)
+        if fitted is not None:
+            return fitted
+
+    words = max(_FILLER_WORDS, int(round(target * _WORDS_PER_TOKEN)))
+    return synth(max(1, words // _FILLER_WORDS), 0), None
+
+
+def _fit_to_target(target, tokenize, synth) -> Optional[Tuple[str, int]]:
+    """Fit the synthetic prompt to ``target`` tokens, or ``None`` if it can't.
+
+    Two probes give the per-unit slope and the constant overhead (BOS plus the
+    instruction, counted once). Solving those for the repeat count lands just
+    under the target; pad words then walk up to it. Undershooting on purpose
+    matters: an overshoot cannot be taken back without another round trip.
+    """
+    one = tokenize(synth(1, 0))
+    many = tokenize(synth(_PROBE_UNITS, 0))
+    if one is None or many is None:
+        return None
+    per_unit = (many - one) / (_PROBE_UNITS - 1)
+    if per_unit <= 0:
+        return None
+    overhead = one - per_unit
+    per_pad = per_unit / _FILLER_WORDS
+
+    units = max(0, int((target - overhead) // per_unit) - 1)
+    pads = 0
+    text = synth(units, pads)
+    count = tokenize(text)
+    if count is None:
+        return None
+
+    for _ in range(_MAX_REFINEMENTS):
+        if count >= target:
+            break
+        pads += max(1, int((target - count) // per_pad))
+        candidate = synth(units, pads)
+        grown = tokenize(candidate)
+        if grown is None or grown <= count:
+            break        # the tokenizer stopped responding to padding
+        text, count = candidate, grown
+    return text, count

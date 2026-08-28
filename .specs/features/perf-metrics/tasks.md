@@ -247,7 +247,7 @@ T17
 
 ---
 
-### T8: `build_context_prompt()`
+### T8: `build_context_prompt()` ✅ Complete
 
 **What**: sintetizar um prompt na profundidade alvo, exato via tokenizer injetado ou estimado quando não houver.
 **Where**: `src/homebench/metrics/depth.py`
@@ -258,13 +258,13 @@ T17
 **Tools**: MCP: NONE · Skill: NONE
 
 **Done when**:
-- [ ] Com tokenizer: a contagem devolvida bate exatamente com o alvo
-- [ ] Sem tokenizer (`None`): devolve texto e contagem `None`, sem levantar
-- [ ] Alvo `0` devolve o prompt curto de velocidade, não texto de filler
-- [ ] Lida com o offset de BOS (medido: 1 unidade = 11 tokens, 100 = 1001)
-- [ ] Não faz nenhuma chamada de rede própria (tokenizer é injetado)
-- [ ] Gate check passes: `.venv/bin/python -m pytest -q tests/test_depth_prompt.py`
-- [ ] Test count: 408 + 6 = 414 testes passam
+- [x] Com tokenizer: a contagem devolvida bate exatamente com o alvo
+- [x] Sem tokenizer (`None`): devolve texto e contagem `None`, sem levantar
+- [x] Alvo `0` devolve o prompt curto de velocidade, não texto de filler
+- [x] Lida com o offset de BOS (medido: 1 unidade = 11 tokens, 100 = 1001)
+- [x] Não faz nenhuma chamada de rede própria (tokenizer é injetado)
+- [x] Gate check passes: `.venv/bin/python -m pytest -q tests/test_depth_prompt.py`
+- [x] Test count: 408 + 6 = 414 testes passam
 
 **Tests**: unit
 **Gate**: quick
