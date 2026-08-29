@@ -10,6 +10,17 @@ dist/
 venv/
 env/
 
+# Local environment / secrets
+.env
+.env.*
+!.env.example
+
+# Test coverage
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
 # Generated benchmark output (local only; archive important runs under
 # docs/benchmarks/ if they must be recoverable from Git)
 /homebench-report.md
