@@ -154,10 +154,11 @@ class OpenAICompatibleProvider(Provider):
                     for choice in obj.get("choices", []):
                         delta = choice.get("delta") or {}
                         piece = delta.get("content") or ""
-                        # reasoning models stream their tokens here and send
-                        # content: null -- they cost the same compute, so they
-                        # count as generated tokens (PERF-01)
-                        thought = delta.get("reasoning_content") or ""
+                        # Reasoning extensions use either reasoning_content
+                        # (llama.cpp and older vLLM) or reasoning (vLLM 0.28).
+                        # They cost the same compute, so count both as output.
+                        thought = (delta.get("reasoning_content") or
+                                   delta.get("reasoning") or "")
                         if (piece or thought) and first_token_at is None:
                             first_token_at = time.perf_counter()
                         if piece:

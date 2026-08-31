@@ -148,6 +148,15 @@ REASONING_ONLY = [
     "data: [DONE]",
 ]
 
+VLLM_REASONING_ONLY = [
+    'data: {"choices":[{"delta":{"role":"assistant","content":""}}]}',
+    'data: {"choices":[{"delta":{"reasoning":"The"}}]}',
+    'data: {"choices":[{"delta":{"reasoning":" answer"}}]}',
+    'data: {"choices":[],"usage":{"prompt_tokens":15,"completion_tokens":2,'
+    '"completion_tokens_details":{"reasoning_tokens":2}}}',
+    "data: [DONE]",
+]
+
 MIXED = [
     'data: {"choices":[{"delta":{"reasoning_content":"Think"}}]}',
     'data: {"choices":[{"delta":{"reasoning_content":" more"}}]}',
@@ -167,6 +176,21 @@ def test_reasoning_only_stream_reports_a_real_rate(monkeypatch):
     assert result.speed.ttft_s > 0
     assert result.speed.output_tokens == 3
     assert result.text == ""                   # reasoning is not the answer
+
+
+def test_vllm_reasoning_stream_reports_ttft_and_decode(monkeypatch):
+    # vLLM 0.28 streams reasoning in delta.reasoning rather than the older
+    # delta.reasoning_content extension. Both represent generated tokens.
+    _stream(monkeypatch, VLLM_REASONING_ONLY, clock=[10.0, 10.5, 12.5])
+
+    speed = VLLMProvider().generate("m", "hi").speed
+
+    assert speed.reasoning_tokens == 2
+    assert speed.output_tokens == 2
+    assert speed.ttft_s == 0.5
+    assert speed.eval_s == 2.0
+    assert speed.tokens_per_sec == 1.0
+    assert speed.prefill_tps is None
 
 
 def test_ttft_is_taken_at_the_first_reasoning_token(monkeypatch):

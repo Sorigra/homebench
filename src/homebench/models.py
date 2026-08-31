@@ -60,7 +60,7 @@ class SpeedMetrics:
     load_s: float = 0.0            # model load time (excluded from other metrics)
     total_s: float = 0.0           # wall-clock request duration
     content_tokens: int = 0        # tokens streamed in delta.content
-    reasoning_tokens: int = 0      # tokens streamed in delta.reasoning_content
+    reasoning_tokens: int = 0      # delta.reasoning[_content] stream tokens
     #: prompt-processing rate. ``None`` means "unknown" -- never 0.0, which is
     #: a valid measurement and would read as a real (very slow) prefill.
     prefill_tps: Optional[float] = None

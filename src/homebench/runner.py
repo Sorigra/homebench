@@ -246,7 +246,7 @@ class Runner:
         sweep = measure_at_depths(self.provider, model, cfg.depths or [0],
                                   cfg=cfg, warn=_warn, on_depth=_on_depth)
 
-        # Zero tokens in both content and reasoning_content is a failed
+        # Zero tokens in both content and either reasoning field is a failed
         # generation, not a slow one: say so instead of leaving a silent
         # 0.00 tok/s that looks like a real result (PERF-05).
         for point in sweep.points:
