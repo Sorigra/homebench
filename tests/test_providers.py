@@ -193,6 +193,88 @@ def test_vllm_reasoning_stream_reports_ttft_and_decode(monkeypatch):
     assert speed.prefill_tps is None
 
 
+def _vllm_metrics(*, requests, prefill_s, decode_s, prefill_tokens,
+                  generation_tokens):
+    labels = 'engine="0",model_name="m"'
+    return "\n".join([
+        f'vllm:request_prefill_time_seconds_sum{{{labels}}} {prefill_s}',
+        f'vllm:request_prefill_time_seconds_count{{{labels}}} {requests}',
+        f'vllm:request_decode_time_seconds_sum{{{labels}}} {decode_s}',
+        f'vllm:request_prefill_kv_computed_tokens_sum{{{labels}}} {prefill_tokens}',
+        f'vllm:request_generation_tokens_sum{{{labels}}} {generation_tokens}',
+    ])
+
+
+def test_vllm_server_metrics_supply_prefill_and_decode(monkeypatch, httpx_mock):
+    lines = [
+        'data: {"choices":[{"delta":{"reasoning":"a"}}]}',
+        'data: {"choices":[],"usage":{"prompt_tokens":100,'
+        '"completion_tokens":5}}',
+        "data: [DONE]",
+    ]
+    _stream(monkeypatch, lines)
+    httpx_mock.add_response(
+        url="http://localhost:8000/metrics",
+        text=_vllm_metrics(requests=4, prefill_s=2.0, decode_s=3.0,
+                           prefill_tokens=300, generation_tokens=20),
+    )
+    httpx_mock.add_response(
+        url="http://localhost:8000/metrics",
+        text=_vllm_metrics(requests=5, prefill_s=2.25, decode_s=3.2,
+                           prefill_tokens=400, generation_tokens=25),
+    )
+
+    speed = VLLMProvider().generate("m", "hi", cache_prompt=False).speed
+
+    assert speed.prompt_eval_s == 0.25
+    assert speed.prefill_tps == 400.0       # 100 computed tokens / 0.25 s
+    assert speed.eval_s == pytest.approx(0.2)
+    assert speed.tokens_per_sec == pytest.approx(20.0)  # 4 decode tokens / 0.2 s
+    assert speed.timings_source == "server"
+
+
+def test_vllm_concurrent_metrics_fall_back_to_client(monkeypatch):
+    lines = [
+        'data: {"choices":[{"delta":{"content":"a"}}]}',
+        'data: {"choices":[],"usage":{"prompt_tokens":100,'
+        '"completion_tokens":5}}',
+        "data: [DONE]",
+    ]
+    _stream(monkeypatch, lines, clock=[0.0, 1.0, 3.0])
+    snapshots = iter([
+        {"requests": 4, "prefill_s": 2.0, "decode_s": 3.0,
+         "prefill_tokens": 300, "generation_tokens": 20},
+        {"requests": 6, "prefill_s": 2.5, "decode_s": 3.4,
+         "prefill_tokens": 500, "generation_tokens": 30},
+    ])
+    provider = VLLMProvider()
+    monkeypatch.setattr(provider, "_metrics_snapshot", lambda _model: next(snapshots))
+
+    speed = provider.generate("m", "hi", cache_prompt=False).speed
+
+    assert speed.prefill_tps is None
+    assert speed.tokens_per_sec == 2.5
+    assert speed.timings_source == "client"
+
+
+def test_vllm_without_metrics_falls_back_to_client(monkeypatch):
+    lines = [
+        'data: {"choices":[{"delta":{"content":"a"}}]}',
+        'data: {"choices":[],"usage":{"prompt_tokens":10,'
+        '"completion_tokens":2}}',
+        "data: [DONE]",
+    ]
+    _stream(monkeypatch, lines, clock=[0.0, 0.5, 1.5])
+    provider = VLLMProvider()
+    monkeypatch.setattr(provider, "_metrics_snapshot", lambda _model: None)
+
+    speed = provider.generate("m", "hi", cache_prompt=False).speed
+
+    assert speed.prefill_tps is None
+    assert speed.tokens_per_sec == 2.0
+    assert speed.timings_source == "client"
+
+
 def test_ttft_is_taken_at_the_first_reasoning_token(monkeypatch):
     # clock: start=10.0, first token=10.5, end=12.5
     _stream(monkeypatch, REASONING_ONLY, clock=[10.0, 10.5, 12.5])

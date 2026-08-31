@@ -89,10 +89,33 @@ Para medir o ganho de batching/concorrência do vLLM:
   -m ID_EXATO_DO_MODELO --concurrency 1,2,4,8
 ```
 
+O benchmark oficial do vLLM é uma segunda referência útil. Quando o servidor roda no container
+`vllm-rocm`, este comando fixa 8192 tokens de entrada, 128 de saída e concorrência 1:
+
+```bash
+docker exec -it vllm-rocm vllm bench serve \
+  --backend vllm \
+  --host 127.0.0.1 \
+  --port 8000 \
+  --dataset-name random \
+  --input-len 8192 \
+  --output-len 128 \
+  --num-prompts 1 \
+  --max-concurrency 1 \
+  --ignore-eos
+```
+
+`--ignore-eos` impede encerramento antecipado e mantém a quantidade de tokens de saída comparável
+entre runs. Não remova essa opção em workloads controlados.
+
 Se `VLLM_HOST` já estiver exportada, `--host` pode ser omitido. O `homebench` não inicia,
 carrega nem encerra o vLLM: o modelo precisa estar servido antes do teste. A API OpenAI do vLLM
-não informa as mesmas métricas internas do llama.cpp; por isso `Prefill tok/s` e `Memory` podem
-ficar em branco, enquanto decode tok/s e TTFT continuam sendo medidos pelo cliente.
+não inclui timings no stream como o llama.cpp, mas o `homebench` lê os deltas server-side de
+`/metrics` durante as sondagens de velocidade. Com exatamente uma requisição no intervalo,
+`Prefill tok/s` usa tokens KV realmente computados e `Decode tok/s` usa o tempo de decode do
+servidor. Se `/metrics` não estiver disponível ou outra requisição concorrer no intervalo, o
+prefill fica em branco e decode/TTFT continuam sendo medidos pelo cliente. `Memory` pode ficar em
+branco porque a API não informa o uso residente do modelo.
 
 ---
 
