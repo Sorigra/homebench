@@ -57,6 +57,45 @@ gerenciamento de modelo. Contra um `llama-server` comum ele se comporta como ant
 
 ---
 
+## 2b. Apontar para um servidor vLLM
+
+O vLLM expõe uma API compatível com OpenAI. Por padrão o `homebench` procura o servidor em
+`http://localhost:8000`; para outro endereço, use `--host` ou `VLLM_HOST`:
+
+```bash
+export VLLM_HOST=http://127.0.0.1:8000
+# Somente se o servidor foi iniciado com `vllm serve ... --api-key`:
+export VLLM_API_KEY='sua-chave'
+```
+
+Primeiro confirme que o servidor responde e veja o id exato publicado por `/v1/models`:
+
+```bash
+.venv/bin/homebench list --provider vllm --host http://127.0.0.1:8000
+```
+
+Depois rode o benchmark de latência e velocidade. Como o foco desta fork é performance bruta,
+este exemplo desliga qualidade e mede somente contexto zero:
+
+```bash
+.venv/bin/homebench run --provider vllm --host http://127.0.0.1:8000 \
+  --no-quality --depths 0 -m ID_EXATO_DO_MODELO
+```
+
+Para medir o ganho de batching/concorrência do vLLM:
+
+```bash
+.venv/bin/homebench throughput --provider vllm --host http://127.0.0.1:8000 \
+  -m ID_EXATO_DO_MODELO --concurrency 1,2,4,8
+```
+
+Se `VLLM_HOST` já estiver exportada, `--host` pode ser omitido. O `homebench` não inicia,
+carrega nem encerra o vLLM: o modelo precisa estar servido antes do teste. A API OpenAI do vLLM
+não informa as mesmas métricas internas do llama.cpp; por isso `Prefill tok/s` e `Memory` podem
+ficar em branco, enquanto decode tok/s e TTFT continuam sendo medidos pelo cliente.
+
+---
+
 ## 3. Ver o que está carregado
 
 ```bash
