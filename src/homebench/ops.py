@@ -5,6 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+from . import doctor, history
+from .doctor import Check
+from .history import RunRecord
 from .lifecycle.router import LlamaRouterClient
 from .providers.base import ProviderError
 
@@ -35,3 +38,11 @@ def router_status(client: Optional[LlamaRouterClient] = None) -> RouterStatus:
         if router.api_key and router.api_key in error:
             error = error.replace(router.api_key, "***")
         return RouterStatus(host=host, reachable=False, error=error)
+
+
+def doctor_snapshot() -> List[Check]:
+    return doctor.run_checks()
+
+
+def history_snapshot(home: Optional[str] = None) -> List[RunRecord]:
+    return history.list_runs(home=home)

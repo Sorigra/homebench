@@ -268,10 +268,10 @@ T15 -> T16
 **Tools**: MCP: NONE · Skill: tlc-spec-driven
 
 **Done when**:
-- [ ] Snapshot de doctor com **dois** `Check` (ok e fail) preserva ambos
-- [ ] Histórico vazio = lista vazia, sem exceção
-- [ ] **Dois** runs: mais novo primeiro
-- [ ] Gate: `.venv/bin/python -m pytest -q` exit 0
+- [x] Snapshot de doctor com **dois** `Check` (ok e fail) preserva ambos
+- [x] Histórico vazio = lista vazia, sem exceção
+- [x] **Dois** runs: mais novo primeiro
+- [x] Gate: `.venv/bin/python -m pytest -q` exit 0
 
 **Tests**: unit
 **Gate**: quick
