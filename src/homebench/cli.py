@@ -120,6 +120,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("doctor", help="diagnose provider / models / setup")
 
+    sub.add_parser("panel", help="open the guided BIOS panel")
+
     diff_p = sub.add_parser("diff", help="diff two saved runs (base -> new)")
     diff_p.add_argument("a", nargs="?", default=None,
                         help="base run: 'latest'/'prev', a 1-based index, or a path")
@@ -194,15 +196,27 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 _COMMANDS = {"run", "list", "models", "tasks", "history", "diff", "throughput",
-             "fit", "report", "doctor"}
+             "fit", "report", "doctor", "panel"}
 
 
-def _inject_default_command(argv: List[str]) -> List[str]:
+def _inject_default_command(
+    argv: List[str],
+    *,
+    stdin_is_tty: Optional[bool] = None,
+    stdout_is_tty: Optional[bool] = None,
+) -> List[str]:
     """Make ``run`` the default: `homebench --no-tui` == `homebench run --no-tui`.
 
+    Empty argv on an interactive terminal opens the guided panel instead.
     Global help/version are left for the top-level parser to handle.
     """
     if not argv:
+        if stdin_is_tty is None:
+            stdin_is_tty = sys.stdin.isatty()
+        if stdout_is_tty is None:
+            stdout_is_tty = sys.stdout.isatty()
+        if stdin_is_tty and stdout_is_tty:
+            return ["panel"]
         return ["run"]
     if argv[0] in _COMMANDS or argv[0] in ("-h", "--help", "--version"):
         return argv
@@ -857,6 +871,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         return cmd_tasks(args, console)
     if command == "doctor":
         return cmd_doctor(args, console)
+    if command == "panel":
+        return 0
     if command == "history":
         return cmd_history(args, console)
     if command == "diff":

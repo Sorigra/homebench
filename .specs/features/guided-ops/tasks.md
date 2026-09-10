@@ -290,11 +290,11 @@ T15 -> T16
 **Tools**: MCP: NONE · Skill: tlc-spec-driven
 
 **Done when**:
-- [ ] `([], stdin_is_tty=False, stdout_is_tty=False) == ["run"]` (pytest/CI)
-- [ ] `([], stdin_is_tty=True, stdout_is_tty=True) == ["panel"]`
-- [ ] `["doctor"]` e `["run", "--no-tui"]` inalterados
-- [ ] `"panel"` ∈ `_COMMANDS`
-- [ ] Gate: `.venv/bin/python -m pytest -q` exit 0
+- [x] `([], stdin_is_tty=False, stdout_is_tty=False) == ["run"]` (pytest/CI)
+- [x] `([], stdin_is_tty=True, stdout_is_tty=True) == ["panel"]`
+- [x] `["doctor"]` e `["run", "--no-tui"]` inalterados
+- [x] `"panel"` ∈ `_COMMANDS`
+- [x] Gate: `.venv/bin/python -m pytest -q` exit 0
 
 **Tests**: unit
 **Gate**: quick

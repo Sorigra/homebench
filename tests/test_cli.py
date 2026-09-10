@@ -1,15 +1,19 @@
-from homebench.cli import _inject_default_command, build_parser
+from homebench.cli import _COMMANDS, _inject_default_command, build_parser
 
 
 def test_inject_default_command():
-    assert _inject_default_command([]) == ["run"]
+    assert _inject_default_command([], stdin_is_tty=False, stdout_is_tty=False) == ["run"]
+    assert _inject_default_command([], stdin_is_tty=True, stdout_is_tty=True) == ["panel"]
     assert _inject_default_command(["--no-tui"]) == ["run", "--no-tui"]
     assert _inject_default_command(["-m", "x"]) == ["run", "-m", "x"]
     # explicit subcommands are left untouched
     assert _inject_default_command(["list"]) == ["list"]
+    assert _inject_default_command(["doctor"]) == ["doctor"]
+    assert _inject_default_command(["run", "--no-tui"]) == ["run", "--no-tui"]
     assert _inject_default_command(["run", "--limit", "2"]) == ["run", "--limit", "2"]
     # global help/version bypass the default
     assert _inject_default_command(["--version"]) == ["--version"]
+    assert "panel" in _COMMANDS
 
 
 def test_provider_flag_reaches_list_command():
@@ -36,7 +40,7 @@ def test_run_flags_parse():
 # =====================================================================
 def test_depths_flag_defaults_to_the_three_point_sweep():
     parser = build_parser()
-    args = parser.parse_args(_inject_default_command([]))
+    args = parser.parse_args(_inject_default_command([], stdin_is_tty=False, stdout_is_tty=False))
     assert args.depths == "0,8192,32768"
 
 
