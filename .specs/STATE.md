@@ -152,82 +152,58 @@ descarga individual.
 
 ---
 
+### AD-008 — Config persistida em `$HOMEBENCH_HOME/config.json`; env ganha; chave só como path
+
+**Data:** 2026-09-10 · **Status:** Aceita
+
+O caminho cotidiano deixa de ser export manual. `setup.sh` e o painel gravam `host`,
+`api_key_file`, `model_dir` e `last_plan` em `$HOMEBENCH_HOME/config.json` (default
+`~/.homebench/config.json`). Variáveis já definidas (`LLAMACPP_HOST`, `LLAMACPP_API_KEY`,
+`HOMEBENCH_MODEL_DIR`) ganham do arquivo. O valor da chave **nunca** é escrito no JSON: só o
+caminho do arquivo; a leitura é na hora, em memória.
+
+**Trade-off.** Um arquivo a mais vs. só env. Sem o arquivo o operador volta ao `docs/USO.md`.
+
+**Scope.** Qualquer entrada (`panel`, `run`, `doctor`, `models`) deve chamar `apply_to_environ`
+cedo. Futura API web reusa o mesmo `config.py`.
+
+---
+
+### AD-009 — Argv vazio em TTY abre o painel, não o run
+
+**Data:** 2026-09-10 · **Status:** Aceita
+
+`homebench` sem argumentos, com stdin e stdout TTY, abre o painel BIOS. Sem TTY (pytest, pipe,
+CI) o argv vazio continua sendo `run`, para não quebrar scripts. Qualquer argumento preserva a
+CLI atual. Escolhido pelo operador (item 4 da discussão guided-ops).
+
+**Trade-off.** Quem digitava `homebench` e esperava os 3 menores automaticamente agora cai no
+painel. O atalho antigo é `homebench run`.
+
+**Scope.** `_inject_default_command` e o subcomando `panel`. Features seguintes não devem
+voltar a injetar `run` no TTY vazio.
+
+---
+
+
 ## Handoff
 
-**Onde parou:** `perf-metrics` mesclada, **testada ao vivo pelo usuário**, e dois defeitos que o
-teste ao vivo revelou já corrigidos. `main` está em **0.13.1**, tag `v0.13.1`. 2026-08-28.
+- **Feature**: guided-ops (`.specs/features/guided-ops/`)
+- **Phase / Task**: Specify + Design + Tasks escritos. Execute **não** começou.
+- **Completed**: context.md travado; spec.md (`validate_spec.py` 0/0); design.md; tasks.md T1–T16 (`validate_tasks.py` 0 erros, 1 warn T16 docs=`none`); AD-008 e AD-009 apensados.
+- **In-progress**: none
+- **Next step**: Operador confirma spec + design + tasks. Depois **abre sessão Cursor nova**, resume estes artefatos, implementa com workers **Composer 2.5** (~7 tasks/batch, fases inteiras). Não implementar nesta conversa.
+- **Blockers**: confirmação do operador; contexto desta sessão grande
+- **Uncommitted files**: `.specs/features/guided-ops/{context,spec,design,tasks}.md`, `.specs/STATE.md` (AD-008/009 + este Handoff). Sem código de feature.
+- **Branch**: a que estiver em `git status` (não criar branch até Execute)
 
-**Nada enviado para remoto.** `main` local está à frente de `origin/main`; as tags `v0.13.0` e
-`v0.13.1` só existem localmente. `git push` e `git push --tags` continuam exigindo autorização
-explícita na hora. A branch `feat/perf-metrics` ainda existe (não deletada).
+**Execute (sessão nova):**
+1. Ler `.specs/STATE.md` Decisions + este Handoff; reconciliar com `git status`.
+2. Ler `spec.md`, `context.md`, `design.md`, `tasks.md`.
+3. Ativar skill `tlc-spec-driven`. Pack: Phase 1–3 (T1–T8), depois 4–6 (T9–T16).
+4. Modelo dos workers: Composer 2.5. Verifier no fechamento (autor ≠ verificador).
+5. Um commit atômico por task. Sem `git push` sem autorização.
 
-**Testes:** **456 passam, 5 pulados** (449 + 7 novos). `twine check` PASSOU em
-`homebench-0.13.1-py3-none-any.whl` e `.tar.gz`.
+**Proibições permanentes:** sem Docker/sudo/container (AD-001); sem logar/commitar a API key; sem `git push` sem autorização na hora.
 
-### Teste de aceitação ao vivo: FEITO
-
-O usuário rodou contra o router real (run salvo em `~/.homebench/runs/run-20260828-164828.json`,
-3 modelos, varredura completa `0/8192/32768`). **A feature passou:**
-
-- `Ornith-1.5-35B-A3B-Q8`: decode 53.4 tok/s onde antes reportava `0.00` — o defeito do
-  `reasoning_content` está morto, confirmado contra hardware.
-- Degradação por profundidade é real e coerente: decode 53.4 → 50.6 → 43.5, prefill
-  204 → 981 → 798 (o prefill sobe do depth 0 porque 31 tokens não amortizam o batch).
-- `timings_source: "server"` em todos os pontos; `cache_hit_tokens: 0` em todos, ou seja o
-  `cache_prompt=False` está de fato impedindo leitura de KV cache.
-
-### Dois defeitos que o run ao vivo expôs — corrigidos em 0.13.1
-
-**1. Coluna `Memory` sempre vazia (`ab2ebf8`).** O provider `llamacpp` herdava o `memory()` vazio
-do OpenAI-compatible, que delega para amostragem de RSS. **RSS é cego neste host:** com
-`--n-gpu-layers 999` os pesos ficam na memória da GPU e nunca entram no resident set do
-`llama-server` — o Ornith (37,8 GB em disco) amostrou 2,3 GB de Peak, e o
-`foundation-sec-8b-q4_k_m` amostrou **zero**. Agora `memory()` lê o argv que o router resolveu
-(`GET /v1/models` → `status.args`), pega o caminho do `--model` e mede o GGUF. Caminho de
-container é mapeado por `$HOMEBENCH_MODEL_DIR` (aqui `/home/ai-models`), descartando componentes
-iniciais até o resto resolver. Não resolveu ⇒ métrica vazia, nunca um chute. GGUF dividido soma
-os pedaços. **Verificado ao vivo nos 17 modelos, sem carregar nenhum** (só leitura).
-
-**2. Erro dentro de um stream 200 era engolido (`7f40712`).** O `llama-server` responde 200 e
-manda `data: {"error": ...}` no meio do stream quando a geração falha — prompt acima da janela de
-contexto, por exemplo. O parser só lia `choices`, então o frame era ignorado e a chamada
-retornava "com sucesso" e zero tokens: mais um `0.00 tok/s` com cara de medição válida, a mesma
-família de defeito que a feature existe para eliminar. Foi o que aconteceu com
-`foundation-sec-8b-q4_k_m` em 32768 (`depth_actual: 0`, `output_tokens: 0`, `skipped: None`).
-Agora levanta `ProviderError` com a mensagem do servidor, e a varredura reconhece overflow de
-contexto e pula aquela profundidade com o motivo.
-
-Processo: conserto direto, inline, dois commits atômicos, sem subagente e sem pipeline de 4
-fases — dimensionado à mudança, conforme `AGENTS.md § Cost discipline`.
-
-### Achado de ambiente (não é bug do homebench)
-
-O preset do router para **`gpt-oss-120b`** aponta `--model` para
-`/models/gpt-oss-120b/eagle3-gpt-oss-120b-Q8_0.gguf` — o modelo de rascunho, **849 MB** — e não
-para `gpt-oss-120b-MXFP4.gguf` (63 GB). Benchmarcar `gpt-oss-120b` mede o draft. O id
-`gpt-oss-120b-eagle3` está correto (MXFP4 como `--model` + eagle3 como draft). Confirmar o preset
-antes de comparar esses dois.
-
-### Pendências
-
-- `git push` / `git push --tags`: **não feito, não autorizado**.
-- `CLAUDE.md` continua modificado na árvore de trabalho desde antes desta feature (reduzido a
-  `@AGENTS.md`). Não é mudança destas sessões e nunca foi commitado — decisão do usuário.
-- Saídas rotineiras ficam em `benchmark-results/` (ignorado); resultados que precisam sobreviver
-  à máquina são revisados e arquivados em `docs/benchmarks/` antes de commit/push.
-- O resultado Vulkan que sustentou o trabalho de performance foi preservado em
-  `docs/benchmarks/strix-halo/vulkan-2026-08-28.json`.
-
-### Regra desta fork
-
-`AGENTS.md § Cost discipline` (commit `56641c8`): Sonnet é o default, processo dimensionado à
-mudança, máximo 3 subagentes incluindo Verifier, e **declarar o custo esperado antes de
-despachar**. O usuário estourou ~85% da assinatura na feature `perf-metrics`; custo é requisito.
-
-### Autorizações e proibições permanentes
-
-- **Proibido:** iniciar, parar ou reiniciar qualquer container (AD-001).
-- **Proibido sem autorização explícita na hora:** `git push` e qualquer operação remota.
-- Chave da API em `~/llm-server/llama/api-key.txt` — **nunca logar nem commitar**.
-- Estado do router ao fim desta sessão: nenhum modelo foi carregado por mim (só chamadas de
-  leitura `GET /props` e `GET /v1/models`).
+---

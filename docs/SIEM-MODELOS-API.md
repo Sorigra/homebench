@@ -11,21 +11,21 @@ Este documento resume os testes realizados em 10 de setembro de 2026 no AMD Stri
 - Investigação: `qwen3.8-27b-unsloth`, um slot de 131.072 tokens
 - Qwen: `Qwen3.8-27B-UD-Q4_K_XL.gguf`, KV `f16`, MTP interno, raciocínio médio
 
-O `UD-Q4_K_XL` é a quantização 4-bit recomendada pela [Unsloth](https://unsloth.ai/docs/models/qwen3.8). O arquivo `Q4_K_M` anterior foi preservado para rollback. As quantizações Q8_0 e Q4_K_M do Foundation-Sec 1.1 Instruct e o Ornith continuam disponíveis sob demanda, mas não carregam no boot.
-
 ## Resultados dos testes SIEM
 
 Foram usados cinco cenários: PowerShell/LOLBIN, password spray, desativação do CloudTrail, scanner autorizado e comprometimento de identidade com MFA fatigue. A pontuação máxima era 25.
 
-| Modelo | Pontuação | JSON válido | Tempo médio | TTFT médio | Decode |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| `gemma4-e2b` sem MTP | 22/25 | 5/5 | 2,41 s | 0,124 s | 87,3 tok/s |
-| `gemma4-e2b` MTP `n-max=4` | 22/25 | 5/5 | 1,39 s | 0,119 s | 157,4 tok/s |
-| `qwen3.5-4b` sem MTP | 20/25 | 5/5 | 4,05 s | 0,177 s | 57,4 tok/s |
-| `qwen3.5-4b` MTP `n-max=6` | 20/25 | 5/5 | 3,27 s | 0,211 s | 72,1 tok/s |
-| `foundation-sec-1.1-8b-instruct-q4_k_m` | 13/25 | 5/5 | 4,36 s | 0,184 s | 42,0 tok/s |
-| `foundation-sec-1.1-8b-instruct-q8_0` | 14/25 | 5/5 | 6,96 s | 0,172 s | 26,3 tok/s |
-| `qwen3.8-27b-unsloth` | 25/25 | 5/5 | 40,35 s | 0,810 s | 25,0 tok/s |
+
+| Modelo                                  | Pontuação | JSON válido | Tempo médio | TTFT médio | Decode      |
+| --------------------------------------- | --------- | ----------- | ----------- | ---------- | ----------- |
+| `gemma4-e2b` sem MTP                    | 22/25     | 5/5         | 2,41 s      | 0,124 s    | 87,3 tok/s  |
+| `gemma4-e2b` MTP `n-max=4`              | 22/25     | 5/5         | 1,39 s      | 0,119 s    | 157,4 tok/s |
+| `qwen3.5-4b` sem MTP                    | 20/25     | 5/5         | 4,05 s      | 0,177 s    | 57,4 tok/s  |
+| `qwen3.5-4b` MTP `n-max=6`              | 20/25     | 5/5         | 3,27 s      | 0,211 s    | 72,1 tok/s  |
+| `foundation-sec-1.1-8b-instruct-q4_k_m` | 13/25     | 5/5         | 4,36 s      | 0,184 s    | 42,0 tok/s  |
+| `foundation-sec-1.1-8b-instruct-q8_0`   | 14/25     | 5/5         | 6,96 s      | 0,172 s    | 26,3 tok/s  |
+| `qwen3.8-27b-unsloth`                   | 25/25     | 5/5         | 40,35 s     | 0,810 s    | 25,0 tok/s  |
+
 
 No Gemma, o MTP foi medido com `n-max` de 1 a 4. Todos mantiveram 22/25 e JSON válido em 5/5; `n-max=4` foi o mais rápido, com aproximadamente 80% mais decode e 43% menos latência que o baseline. O Qwen produziu técnicas MITRE e ações mais específicas, mas consumiu de 727 a 1.292 tokens e levou de 29,5 a 50,7 segundos por caso.
 
@@ -42,6 +42,8 @@ Os cinco casos são uma verificação funcional, não uma avaliação estatísti
 3. Casos críticos/altos, inéditos, contraditórios, multi-fonte ou de baixa confiança seguem para o Qwen.
 4. Fechamento automático é permitido somente para padrões benignos confirmados por allowlist, CMDB e janela de mudança.
 5. A aplicação valida o JSON e mantém auditoria do alerta, prompt, modelo, parâmetros e resposta.
+
+
 
 ## Autenticação e descoberta
 
@@ -60,6 +62,8 @@ Authorization: Bearer <chave>
 Content-Type: application/json
 Accept: application/json
 ```
+
+
 
 ## Chamada de triagem com Gemma
 
@@ -105,6 +109,8 @@ curl -s http://127.0.0.1:8080/v1/chat/completions \
     }
   }'
 ```
+
+
 
 ## Chamada de investigação com Qwen
 
