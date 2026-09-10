@@ -176,11 +176,11 @@ T15 -> T16
 **Tools**: MCP: NONE · Skill: tlc-spec-driven
 
 **Done when**:
-- [ ] Fake `python3` 3.8 no PATH ⇒ exit ≠ 0 e sem `.venv`
-- [ ] Doctor/router fail ⇒ exit 0 se venv+config existem; nenhum docker
-- [ ] Segundo run `--defaults` não falha
-- [ ] Invocar via path absoluto a partir de outro cwd grava no repo do script
-- [ ] Gate: `.venv/bin/python -m pytest -q` exit 0
+- [x] Fake `python3` 3.8 no PATH ⇒ exit ≠ 0 e sem `.venv`
+- [x] Doctor/router fail ⇒ exit 0 se venv+config existem; nenhum docker
+- [x] Segundo run `--defaults` não falha
+- [x] Invocar via path absoluto a partir de outro cwd grava no repo do script
+- [x] Gate: `.venv/bin/python -m pytest -q` exit 0
 
 **Tests**: unit
 **Gate**: quick
