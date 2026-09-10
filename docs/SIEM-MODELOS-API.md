@@ -7,7 +7,7 @@ Este documento resume os testes realizados em 10 de setembro de 2026 no AMD Stri
 - Endpoint OpenAI-compatible: `http://127.0.0.1:8080/v1`
 - Modelos no host: `/home/eskudo/ai-models`
 - Backend ativo: `llama.cpp` ROCm, build `b10878-4850c7727`
-- Triagem: `gemma4-e2b`, quatro slots de 32.768 tokens
+- Triagem: `gemma4-e2b`, quatro slots de 32.768 tokens, MTP externo com `n-max=4`
 - Investigação: `qwen3.8-27b-unsloth`, um slot de 131.072 tokens
 - Qwen: `Qwen3.8-27B-UD-Q4_K_XL.gguf`, KV `f16`, MTP interno, raciocínio médio
 
@@ -19,10 +19,11 @@ Foram usados cinco cenários: PowerShell/LOLBIN, password spray, desativação d
 
 | Modelo | Pontuação | JSON válido | Tempo médio | TTFT médio | Decode |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| `gemma4-e2b` | 22/25 | 5/5 | 2,41 s | 0,124 s | 87,3 tok/s |
+| `gemma4-e2b` sem MTP | 22/25 | 5/5 | 2,41 s | 0,124 s | 87,3 tok/s |
+| `gemma4-e2b` MTP `n-max=4` | 22/25 | 5/5 | 1,39 s | 0,119 s | 157,4 tok/s |
 | `qwen3.8-27b-unsloth` | 25/25 | 5/5 | 40,35 s | 0,810 s | 25,0 tok/s |
 
-O Gemma apresentou vazão adequada para triagem. O Qwen produziu técnicas MITRE e ações mais específicas, mas consumiu de 727 a 1.292 tokens e levou de 29,5 a 50,7 segundos por caso. Foundation-Sec e Ornith consumiram o orçamento em raciocínio sem entregar o contrato JSON de forma confiável nos testes realizados.
+No Gemma, o MTP foi medido com `n-max` de 1 a 4. Todos mantiveram 22/25 e JSON válido em 5/5; `n-max=4` foi o mais rápido, com aproximadamente 80% mais decode e 43% menos latência que o baseline. O Qwen produziu técnicas MITRE e ações mais específicas, mas consumiu de 727 a 1.292 tokens e levou de 29,5 a 50,7 segundos por caso. Foundation-Sec e Ornith consumiram o orçamento em raciocínio sem entregar o contrato JSON de forma confiável nos testes realizados.
 
 Os cinco casos são uma verificação funcional, não uma avaliação estatística. Antes de automatizar decisões, execute um conjunto maior, representativo e rotulado por analistas.
 
