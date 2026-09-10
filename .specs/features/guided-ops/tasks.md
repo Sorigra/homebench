@@ -360,10 +360,10 @@ T15 -> T16
 **Tools**: MCP: NONE · Skill: tlc-spec-driven
 
 **Done when**:
-- [ ] Dois modelos marcáveis; os dois entram no plano
-- [ ] Rodar com zero modelos ou zero depths não encerra o App e mostra a recusa
-- [ ] Plano válido persiste em `config.json` e restaura ids ainda existentes
-- [ ] Gate: `.venv/bin/python -m pytest -q` exit 0
+- [x] Dois modelos marcáveis; os dois entram no plano
+- [x] Rodar com zero modelos ou zero depths não encerra o App e mostra a recusa
+- [x] Plano válido persiste em `config.json` e restaura ids ainda existentes
+- [x] Gate: `.venv/bin/python -m pytest -q` exit 0
 
 **Tests**: unit
 **Gate**: quick

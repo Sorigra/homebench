@@ -1,6 +1,11 @@
 import asyncio
+import json
+import os
 from pathlib import Path
 
+from textual.widgets import Static
+
+from homebench.config import HomebenchConfig, load, save
 from homebench.ops import RouterStatus
 from homebench.tui.panel import PanelApp, format_status_strip, run_panel
 
@@ -72,6 +77,121 @@ def test_panel_quit_returns_none():
         assert app.result is None
 
     asyncio.run(scenario())
+
+
+async def _open_plan(app: PanelApp, pilot):
+    await pilot.press("p")
+    await pilot.pause(0.05)
+
+
+def test_plan_screen_two_models_in_plan(monkeypatch, tmp_path):
+    home = str(tmp_path / "home")
+    monkeypatch.setenv("HOMEBENCH_HOME", home)
+    status = RouterStatus(host=HOST, reachable=True, build_info="b1")
+    model_ids = ["alpha", "beta"]
+
+    async def scenario():
+        app = PanelApp(status=status, model_ids=model_ids, home=home)
+        async with app.run_test() as pilot:
+            await _open_plan(app, pilot)
+            await pilot.click(f"#model-alpha")
+            await pilot.click(f"#model-beta")
+            await pilot.click("#depth-0")
+            plan = app._read_plan_from_ui()
+            assert plan.model_ids == ["alpha", "beta"]
+            assert plan.depths == [0]
+
+    asyncio.run(scenario())
+
+
+def test_plan_run_with_zero_models_shows_message_and_stays(monkeypatch, tmp_path):
+    home = str(tmp_path / "home")
+    monkeypatch.setenv("HOMEBENCH_HOME", home)
+    status = RouterStatus(host=HOST, reachable=True)
+    model_ids = ["alpha", "beta"]
+
+    async def scenario():
+        app = PanelApp(status=status, model_ids=model_ids, home=home)
+        async with app.run_test() as pilot:
+            await _open_plan(app, pilot)
+            await pilot.click("#run-btn")
+            await pilot.pause(0.05)
+            msg = app.query_one("#plan-message", Static)
+            assert "modelo" in str(msg.render()).lower()
+            assert app.result is None
+
+    asyncio.run(scenario())
+
+
+def test_plan_run_with_zero_depths_shows_message(monkeypatch, tmp_path):
+    home = str(tmp_path / "home")
+    monkeypatch.setenv("HOMEBENCH_HOME", home)
+    status = RouterStatus(host=HOST, reachable=True)
+    model_ids = ["alpha", "beta"]
+
+    async def scenario():
+        app = PanelApp(status=status, model_ids=model_ids, home=home)
+        async with app.run_test() as pilot:
+            await _open_plan(app, pilot)
+            await pilot.click("#model-alpha")
+            await pilot.click("#run-btn")
+            await pilot.pause(0.05)
+            msg = app.query_one("#plan-message", Static)
+            assert "profundidade" in str(msg.render()).lower()
+
+    asyncio.run(scenario())
+
+
+def test_last_plan_persists_and_restores_dropping_stale_ids(monkeypatch, tmp_path):
+    home = str(tmp_path / "home")
+    monkeypatch.setenv("HOMEBENCH_HOME", home)
+    save(
+        HomebenchConfig(
+            host=HOST,
+            last_plan={
+                "model_ids": ["alpha", "gone"],
+                "depths": [0, 8192],
+                "run_speed": True,
+                "run_quality": False,
+            },
+        ),
+        home=home,
+    )
+    status = RouterStatus(host=HOST, reachable=True)
+    model_ids = ["alpha", "beta"]
+
+    async def scenario():
+        app = PanelApp(status=status, model_ids=model_ids, home=home)
+        async with app.run_test() as pilot:
+            await _open_plan(app, pilot)
+            plan = app._read_plan_from_ui()
+            assert plan.model_ids == ["alpha"]
+            assert plan.depths == [0, 8192]
+
+    asyncio.run(scenario())
+
+
+def test_valid_plan_saved_on_run(monkeypatch, tmp_path):
+    home = str(tmp_path / "home")
+    monkeypatch.setenv("HOMEBENCH_HOME", home)
+    status = RouterStatus(host=HOST, reachable=True)
+    model_ids = ["alpha", "beta"]
+
+    async def scenario():
+        app = PanelApp(status=status, model_ids=model_ids, home=home)
+        async with app.run_test() as pilot:
+            await _open_plan(app, pilot)
+            await pilot.click("#model-alpha")
+            await pilot.click("#model-beta")
+            await pilot.click("#depth-0")
+            await pilot.click("#run-btn")
+            await pilot.pause(0.05)
+
+    asyncio.run(scenario())
+    cfg = load(home=home)
+    assert cfg.last_plan is not None
+    assert cfg.last_plan["model_ids"] == ["alpha", "beta"]
+    assert cfg.last_plan["depths"] == [0]
 
 
 def test_run_panel_returns_none_on_quit():
