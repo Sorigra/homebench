@@ -286,6 +286,97 @@ def test_doctor_and_history_screens_do_not_call_router(monkeypatch):
     asyncio.run(scenario())
 
 
+async def _run_valid_plan(app, pilot, model_ids=("alpha",)):
+    await _open_plan(app, pilot)
+    for mid in model_ids:
+        await pilot.click(f"#model-{mid}")
+    await pilot.click("#depth-0")
+    await pilot.click("#run-btn")
+    await pilot.pause(0.2)
+
+
+def test_run_refused_when_foreign_residents_and_confirmer_false(monkeypatch, tmp_path):
+    home = str(tmp_path / "home")
+    monkeypatch.setenv("HOMEBENCH_HOME", home)
+    status = RouterStatus(
+        host=HOST, reachable=True, resident_ids=["foreign", "alpha"]
+    )
+    unload_calls = []
+    monkeypatch.setattr(
+        "homebench.lifecycle.router.LlamaRouterClient.unload",
+        lambda self, model: unload_calls.append(model),
+    )
+
+    async def scenario():
+        app = PanelApp(
+            status=status,
+            model_ids=["alpha", "beta"],
+            home=home,
+            confirmer=lambda _foreign: False,
+        )
+        async with app.run_test() as pilot:
+            await _run_valid_plan(app, pilot)
+            assert app.result is None
+
+    asyncio.run(scenario())
+    assert unload_calls == []
+
+
+def test_run_returns_plan_when_confirmer_accepts_foreign(monkeypatch, tmp_path):
+    home = str(tmp_path / "home")
+    monkeypatch.setenv("HOMEBENCH_HOME", home)
+    status = RouterStatus(host=HOST, reachable=True, resident_ids=["foreign"])
+
+    async def scenario():
+        app = PanelApp(
+            status=status,
+            model_ids=["alpha", "beta"],
+            home=home,
+            confirmer=lambda foreign: foreign == ["foreign"],
+        )
+        async with app.run_test() as pilot:
+            await _run_valid_plan(app, pilot)
+            assert app.result is not None
+            assert app.result.model_ids == ["alpha"]
+            assert app.result.depths == [0]
+
+    asyncio.run(scenario())
+
+
+def test_run_returns_plan_without_confirm_when_no_foreigners(monkeypatch, tmp_path):
+    home = str(tmp_path / "home")
+    monkeypatch.setenv("HOMEBENCH_HOME", home)
+    status = RouterStatus(host=HOST, reachable=True, resident_ids=["alpha"])
+
+    async def scenario():
+        app = PanelApp(status=status, model_ids=["alpha", "beta"], home=home)
+        async with app.run_test() as pilot:
+            await _run_valid_plan(app, pilot)
+            assert app.result is not None
+            assert app.result.model_ids == ["alpha"]
+
+    asyncio.run(scenario())
+
+
+def test_panel_does_not_invoke_runner(monkeypatch, tmp_path):
+    home = str(tmp_path / "home")
+    monkeypatch.setenv("HOMEBENCH_HOME", home)
+
+    def _forbidden(*_args, **_kwargs):
+        raise AssertionError("Runner must not be called from the panel")
+
+    monkeypatch.setattr("homebench.runner.Runner.run", _forbidden)
+    monkeypatch.setattr("homebench.tui.app.run_tui", _forbidden)
+    status = RouterStatus(host=HOST, reachable=True, resident_ids=[])
+
+    async def scenario():
+        app = PanelApp(status=status, model_ids=["alpha", "beta"], home=home)
+        async with app.run_test() as pilot:
+            await _run_valid_plan(app, pilot)
+
+    asyncio.run(scenario())
+
+
 def test_run_panel_returns_none_on_quit():
     status = RouterStatus(host=HOST, reachable=True, build_info="b1")
 

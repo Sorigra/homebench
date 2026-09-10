@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import List, Optional, Set
+from typing import Callable, List, Optional
 
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.screen import ModalScreen
 from textual.widgets import Button, Checkbox, Footer, Label, RadioButton, RadioSet, Static
 
 from ..config import load, save
@@ -25,6 +26,44 @@ def format_status_strip(status: RouterStatus) -> str:
             f"{status.host} · up · build {build} · residentes: {residents}"
         )
     return f"{status.host} · down"
+
+
+class UnloadConfirmScreen(ModalScreen[bool]):
+    """Ask before unloading models residentes fora do plano."""
+
+    DEFAULT_CSS = """
+    UnloadConfirmScreen {
+        align: center middle;
+    }
+    #confirm-box {
+        width: 60;
+        height: auto;
+        padding: 1 2;
+        border: thick $warning;
+        background: $surface;
+    }
+    """
+
+    def __init__(self, foreign_ids: List[str]) -> None:
+        super().__init__()
+        self._foreign_ids = foreign_ids
+
+    def compose(self) -> ComposeResult:
+        ids = ", ".join(self._foreign_ids)
+        with Vertical(id="confirm-box"):
+            yield Static(
+                f"Modelos fora do plano estão carregados: {ids}.\n"
+                "Descarregar e continuar?"
+            )
+            with Horizontal():
+                yield Button("Sim", id="confirm-yes", variant="primary")
+                yield Button("Não", id="confirm-no")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "confirm-yes":
+            self.dismiss(True)
+        elif event.button.id == "confirm-no":
+            self.dismiss(False)
 
 
 def discover_model_ids(status: RouterStatus) -> List[str]:
@@ -85,11 +124,13 @@ class PanelApp(App):
         *,
         model_ids: Optional[List[str]] = None,
         home: Optional[str] = None,
+        confirmer: Optional[Callable[[List[str]], bool]] = None,
     ) -> None:
         super().__init__()
         self._status = status
         self._model_ids = model_ids
         self._home = home
+        self._confirmer = confirmer
         self._result: Optional[RunPlan] = None
         self._current_plan = RunPlan(model_ids=[], depths=[])
 
@@ -240,9 +281,14 @@ class PanelApp(App):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "run-btn":
-            self._try_run()
+            self.run_worker(self._try_run, exclusive=True)
 
-    def _try_run(self) -> None:
+    async def _confirm_unload(self, foreign: List[str]) -> bool:
+        if self._confirmer is not None:
+            return self._confirmer(foreign)
+        return await self.push_screen_wait(UnloadConfirmScreen(foreign))
+
+    async def _try_run(self) -> None:
         plan = self._read_plan_from_ui()
         problems = plan.problems()
         msg = self.query_one("#plan-message", Static)
@@ -257,14 +303,24 @@ class PanelApp(App):
         msg.update("")
         self._current_plan = plan
         self._save_last_plan(plan)
+        if self._status is None:
+            self._status = router_status()
+        foreign = [
+            rid for rid in self._status.resident_ids if rid not in plan.model_ids
+        ]
+        if foreign and not await self._confirm_unload(foreign):
+            return
+        self._result = plan
+        self.exit(plan)
 
 
 def run_panel(
     status: Optional[RouterStatus] = None,
     *,
     home: Optional[str] = None,
+    confirmer: Optional[Callable[[List[str]], bool]] = None,
 ) -> Optional[RunPlan]:
     """Open the panel; return a confirmed ``RunPlan`` or ``None`` if the user quit."""
-    app = PanelApp(status=status, home=home)
+    app = PanelApp(status=status, home=home, confirmer=confirmer)
     app.run()
     return app.result

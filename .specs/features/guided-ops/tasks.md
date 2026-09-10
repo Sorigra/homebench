@@ -404,10 +404,10 @@ T15 -> T16
 **Tools**: MCP: NONE · Skill: tlc-spec-driven
 
 **Done when**:
-- [ ] Confirmer false: App continua; `unload` não é chamado
-- [ ] Confirmer true (ou zero estrangeiros): `run_panel()` devolve o `RunPlan`
-- [ ] Painel não chama `Runner.run`
-- [ ] Gate: `.venv/bin/python -m pytest -q` exit 0
+- [x] Confirmer false: App continua; `unload` não é chamado
+- [x] Confirmer true (ou zero estrangeiros): `run_panel()` devolve o `RunPlan`
+- [x] Painel não chama `Runner.run`
+- [x] Gate: `.venv/bin/python -m pytest -q` exit 0
 
 **Tests**: unit
 **Gate**: quick
