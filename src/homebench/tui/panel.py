@@ -8,8 +8,8 @@ from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Button, Checkbox, Footer, Label, RadioButton, RadioSet, Static
 
-from ..config import HomebenchConfig, load, save
-from ..ops import RouterStatus, router_status
+from ..config import load, save
+from ..ops import RouterStatus, doctor_snapshot, history_snapshot, router_status
 from ..plan import DEPTH_CHOICES, RunPlan
 
 _MSG_NEED_MODEL = "Selecione ao menos um modelo."
@@ -53,7 +53,7 @@ class PanelApp(App):
         padding: 0 1;
         background: $surface-darken-1;
     }
-    #menu-body, #plan-body {
+    #menu-body, #plan-body, #doctor-body, #history-body {
         padding: 1 2;
         height: 1fr;
     }
@@ -74,6 +74,8 @@ class PanelApp(App):
     BINDINGS = [
         ("q", "quit_panel", "Sair"),
         ("p", "show_plan", "Planejar"),
+        ("d", "show_doctor", "Doctor"),
+        ("h", "show_history", "Histórico"),
         ("m", "show_menu", "Menu"),
     ]
 
@@ -119,6 +121,14 @@ class PanelApp(App):
             yield Static("", id="plan-message")
             yield Button("Rodar", id="run-btn", variant="primary")
             yield Static("[m] Menu   [q] Sair", id="plan-hint")
+        with Vertical(id="doctor-view", classes="hidden"):
+            yield Label("Doctor")
+            yield Static("", id="doctor-body")
+            yield Static("[m] Menu   [q] Sair", id="doctor-hint")
+        with Vertical(id="history-view", classes="hidden"):
+            yield Label("Histórico")
+            yield Static("", id="history-body")
+            yield Static("[m] Menu   [q] Sair", id="history-hint")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -188,20 +198,42 @@ class PanelApp(App):
         )
 
     def _show_view(self, name: str) -> None:
-        menu = self.query_one("#menu-view")
-        plan = self.query_one("#plan-view")
-        if name == "menu":
-            menu.remove_class("hidden")
-            plan.add_class("hidden")
-        else:
-            menu.add_class("hidden")
-            plan.remove_class("hidden")
+        views = {
+            "menu": self.query_one("#menu-view"),
+            "plan": self.query_one("#plan-view"),
+            "doctor": self.query_one("#doctor-view"),
+            "history": self.query_one("#history-view"),
+        }
+        for key, widget in views.items():
+            if key == name:
+                widget.remove_class("hidden")
+            else:
+                widget.add_class("hidden")
 
     def action_show_menu(self) -> None:
         self._show_view("menu")
 
     def action_show_plan(self) -> None:
         self._show_view("plan")
+
+    def action_show_doctor(self) -> None:
+        lines = [f"{c.status}: {c.name} — {c.detail}" for c in doctor_snapshot()]
+        self.query_one("#doctor-body", Static).update("\n".join(lines) or "Sem checks.")
+        self._show_view("doctor")
+
+    def action_show_history(self) -> None:
+        runs = history_snapshot(home=self._home)
+        if not runs:
+            text = "Ainda não há runs salvos."
+        else:
+            rows = []
+            for rec in runs:
+                label = f" ({rec.label})" if rec.label else ""
+                models = ", ".join(rec.model_names) or "?"
+                rows.append(f"{rec.when} · {rec.provider}{label} · {models}")
+            text = "\n".join(rows)
+        self.query_one("#history-body", Static).update(text)
+        self._show_view("history")
 
     def action_quit_panel(self) -> None:
         self.exit(None)

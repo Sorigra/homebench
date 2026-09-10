@@ -382,10 +382,10 @@ T15 -> T16
 **Tools**: MCP: NONE · Skill: tlc-spec-driven
 
 **Done when**:
-- [ ] Doctor mostra **dois** checks (ok e fail)
-- [ ] Histórico vazio: mensagem, sem exceção
-- [ ] Nenhum `load`/`unload` HTTP disparado ao abrir as telas
-- [ ] Gate: `.venv/bin/python -m pytest -q` exit 0
+- [x] Doctor mostra **dois** checks (ok e fail)
+- [x] Histórico vazio: mensagem, sem exceção
+- [x] Nenhum `load`/`unload` HTTP disparado ao abrir as telas
+- [x] Gate: `.venv/bin/python -m pytest -q` exit 0
 
 **Tests**: unit
 **Gate**: quick

@@ -6,6 +6,8 @@ from pathlib import Path
 from textual.widgets import Static
 
 from homebench.config import HomebenchConfig, load, save
+from homebench.doctor import Check
+from homebench.history import RunRecord
 from homebench.ops import RouterStatus
 from homebench.tui.panel import PanelApp, format_status_strip, run_panel
 
@@ -192,6 +194,96 @@ def test_valid_plan_saved_on_run(monkeypatch, tmp_path):
     assert cfg.last_plan is not None
     assert cfg.last_plan["model_ids"] == ["alpha", "beta"]
     assert cfg.last_plan["depths"] == [0]
+
+
+def test_doctor_screen_shows_ok_and_fail_checks(monkeypatch):
+    checks = [
+        Check("router", "ok", "reachable"),
+        Check("models", "fail", "none found"),
+    ]
+    monkeypatch.setattr("homebench.tui.panel.doctor_snapshot", lambda: checks)
+    status = RouterStatus(host=HOST, reachable=False)
+
+    async def scenario():
+        app = PanelApp(status=status, model_ids=[])
+        async with app.run_test() as pilot:
+            await pilot.press("d")
+            await pilot.pause(0.05)
+            body = app.query_one("#doctor-body", Static)
+            text = str(body.render())
+            assert "ok: router" in text
+            assert "fail: models" in text
+
+    asyncio.run(scenario())
+
+
+def test_history_empty_shows_message(monkeypatch):
+    monkeypatch.setattr("homebench.tui.panel.history_snapshot", lambda home=None: [])
+    status = RouterStatus(host=HOST, reachable=False)
+
+    async def scenario():
+        app = PanelApp(status=status, model_ids=[])
+        async with app.run_test() as pilot:
+            await pilot.press("h")
+            await pilot.pause(0.05)
+            body = app.query_one("#history-body", Static)
+            assert "não há runs" in str(body.render()).lower()
+
+    asyncio.run(scenario())
+
+
+def test_history_shows_two_runs_newest_first(monkeypatch):
+    runs = [
+        RunRecord("new.json", {"started_at": 2000.0, "provider": "llamacpp",
+                               "reports": [{"model": {"name": "beta"}}]}),
+        RunRecord("old.json", {"started_at": 1000.0, "provider": "llamacpp",
+                               "reports": [{"model": {"name": "alpha"}}]}),
+    ]
+    monkeypatch.setattr("homebench.tui.panel.history_snapshot", lambda home=None: runs)
+    status = RouterStatus(host=HOST, reachable=False)
+
+    async def scenario():
+        app = PanelApp(status=status, model_ids=[])
+        async with app.run_test() as pilot:
+            await pilot.press("h")
+            await pilot.pause(0.05)
+            text = str(app.query_one("#history-body", Static).render())
+            assert "beta" in text
+            assert "alpha" in text
+            assert text.index("beta") < text.index("alpha")
+
+    asyncio.run(scenario())
+
+
+def test_doctor_and_history_screens_do_not_call_router(monkeypatch):
+    def _forbidden(*_args, **_kwargs):
+        raise AssertionError("router HTTP not allowed on doctor/history screens")
+
+    monkeypatch.setattr(
+        "homebench.lifecycle.router.LlamaRouterClient.list_models",
+        _forbidden,
+    )
+    monkeypatch.setattr(
+        "homebench.lifecycle.router.LlamaRouterClient.props",
+        _forbidden,
+    )
+    monkeypatch.setattr(
+        "homebench.tui.panel.doctor_snapshot",
+        lambda: [Check("router", "ok", "fine"), Check("disk", "ok", "fine")],
+    )
+    monkeypatch.setattr("homebench.tui.panel.history_snapshot", lambda home=None: [])
+    status = RouterStatus(host=HOST, reachable=True, build_info="b1")
+
+    async def scenario():
+        app = PanelApp(status=status, model_ids=["alpha", "beta"])
+        async with app.run_test() as pilot:
+            await pilot.press("d")
+            await pilot.pause(0.05)
+            await pilot.press("m")
+            await pilot.press("h")
+            await pilot.pause(0.05)
+
+    asyncio.run(scenario())
 
 
 def test_run_panel_returns_none_on_quit():
