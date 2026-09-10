@@ -11,6 +11,7 @@ from rich.console import Console
 from . import __version__
 from .config import apply_to_environ, load
 from .models import ModelInfo
+from .plan import RunPlan
 from .providers import ProviderError, detect_provider, get_provider
 from .quality import LLMJudge
 from .runner import RunConfig, Runner
@@ -604,6 +605,23 @@ def cmd_diff(args, console: Console) -> int:
     return 0
 
 
+def _namespace_for_plan(plan: RunPlan) -> argparse.Namespace:
+    argv = [
+        "run",
+        "--no-tui",
+        "--force-unload",
+        "--depths",
+        ",".join(str(d) for d in plan.depths),
+        "-m",
+        ",".join(plan.model_ids),
+    ]
+    if plan.run_speed and not plan.run_quality:
+        argv.append("--no-quality")
+    elif plan.run_quality and not plan.run_speed:
+        argv.append("--no-speed")
+    return build_parser().parse_args(argv)
+
+
 def cmd_panel(
     args,
     console: Console,
@@ -622,9 +640,10 @@ def cmd_panel(
         return 1
     from .tui.panel import run_panel
 
-    if run_panel() is None:
+    plan = run_panel()
+    if plan is None:
         return 0
-    return 0
+    return cmd_run(_namespace_for_plan(plan), console)
 
 
 def cmd_doctor(args, console: Console) -> int:

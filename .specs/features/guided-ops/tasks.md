@@ -426,11 +426,11 @@ T15 -> T16
 **Tools**: MCP: NONE · Skill: tlc-spec-driven
 
 **Done when**:
-- [ ] `run_panel` None ⇒ `cmd_run` não é chamado, exit 0
-- [ ] Plano só-speed ⇒ `no_quality=True`, `no_speed=False`; ids viram `-m`
-- [ ] `force_unload=True` no Namespace (confirmação já feita)
-- [ ] Teste com `run_panel` monkeypatch; FakeProvider; **não** precisa TTY real
-- [ ] Gate: `.venv/bin/python -m pytest -q` exit 0
+- [x] `run_panel` None ⇒ `cmd_run` não é chamado, exit 0
+- [x] Plano só-speed ⇒ `no_quality=True`, `no_speed=False`; ids viram `-m`
+- [x] `force_unload=True` no Namespace (confirmação já feita)
+- [x] Teste com `run_panel` monkeypatch; FakeProvider; **não** precisa TTY real
+- [x] Gate: `.venv/bin/python -m pytest -q` exit 0
 
 **Tests**: unit
 **Gate**: quick
