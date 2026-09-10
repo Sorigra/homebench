@@ -3,13 +3,40 @@
 Guia prático para rodar o `homebench` **neste ambiente**: mini PC AMD Strix Halo, com o
 llama.cpp em **modo router** dentro do Docker (`~/llm-server/llama/docker-compose.yml`).
 
-- **`llama-vulkan`** → `http://127.0.0.1:8080`
-- **`llama-rocm`** → `http://127.0.0.1:8081`
-- Modelos no host em `/home/ai-models`, montados como `/models` no container.
+- **`llama-rocm`** → `http://127.0.0.1:8080`
+- O backend Vulkan não faz parte do Compose ativo; resultados anteriores ficam apenas como histórico.
+- Modelos no host em `/home/eskudo/ai-models`, montados como `/models` no container.
 - Chave da API em `~/llm-server/llama/api-key.txt`.
 
 > O foco desta fork é **performance bruta** (tok/s, TTFT, memória). O teste de qualidade
 > é secundário — na maioria das vezes você vai querer `--no-quality`.
+
+### Estado atual dos backends
+
+Nos testes feitos **neste Strix Halo**, Vulkan e vLLM não apresentaram bom desempenho em relação
+ao caminho ROCm/llama.cpp. Isso é uma observação preliminar deste ambiente, não uma conclusão
+geral sobre essas tecnologias: versões, flags, quantização, contexto, concorrência e o próprio
+modelo alteram muito o resultado. Para uso cotidiano, comece pelo router ROCm (`:8080`). Use
+Vulkan e vLLM para investigação ou comparação controlada e guarde o JSON de cada execução.
+
+Uma comparação válida deve manter iguais: arquivo/pesos do modelo, quantização, profundidades,
+tokens de saída, concorrência, build do backend e argumentos efetivos. Compare `Prefill tok/s`,
+`Decode tok/s` e TTFT separadamente; um único número de “tok/s” pode esconder gargalos distintos.
+
+### Fluxo recomendado para alertas SIEM
+
+Use duas camadas depois de deduplicar e correlacionar eventos por entidade e janela de tempo:
+
+1. `gemma4-e2b` faz triagem concorrente e retorna JSON curto. Escalone alertas críticos/altos,
+   inéditos, contraditórios, multi-fonte ou com baixa confiança; feche automaticamente apenas
+   benignos que coincidam com allowlist, CMDB e janela de mudança.
+2. `qwen3.8-27b-unsloth` investiga os incidentes escalonados, recebendo o pacote correlacionado,
+   evidências, contexto do ativo e runbooks — não cada evento cru.
+
+Em 2026-09-10, no conjunto local de cinco cenários, Gemma obteve 22/25, JSON válido em 5/5 e
+2,41 s por alerta (87,3 tok/s). Qwen `UD-Q4_K_XL`, com raciocínio médio e MTP interno, obteve
+25/25 e JSON válido em 5/5, mas levou 40,35 s por investigação (25,0 tok/s). Foundation-Sec e
+Ornith permanecem experimentais até entregarem o contrato estruturado dentro do orçamento.
 
 ---
 
@@ -34,16 +61,16 @@ O comando é `.venv/bin/homebench` (ou `homebench` se o `.venv` estiver ativado 
 O `homebench` fala com o router por HTTP. Diga qual host e passe a chave:
 
 ```bash
-export LLAMACPP_HOST=http://127.0.0.1:8080          # vulkan
+export LLAMACPP_HOST=http://127.0.0.1:8080          # ROCm
 export LLAMACPP_API_KEY="$(cat ~/llm-server/llama/api-key.txt)"
-export HOMEBENCH_MODEL_DIR=/home/ai-models          # preenche a coluna Memory
+export HOMEBENCH_MODEL_DIR=/home/eskudo/ai-models   # preenche a coluna Memory
 ```
 
 As duas primeiras são obrigatórias. A terceira diz onde os modelos ficam **no host**: sem ela a
 coluna `Memory` sai em branco (ver §5b). Para não redigitar toda vez:
 
 ```bash
-echo 'export HOMEBENCH_MODEL_DIR=/home/ai-models' >> ~/.bashrc
+echo 'export HOMEBENCH_MODEL_DIR=/home/eskudo/ai-models' >> ~/.bashrc
 ```
 
 Ou por comando, sem exportar nada:
@@ -61,6 +88,9 @@ gerenciamento de modelo. Contra um `llama-server` comum ele se comporta como ant
 
 O vLLM expõe uma API compatível com OpenAI. Por padrão o `homebench` procura o servidor em
 `http://localhost:8000`; para outro endereço, use `--host` ou `VLLM_HOST`:
+
+> Neste equipamento, os testes com vLLM ficaram abaixo do esperado. Os comandos abaixo continuam
+> úteis para reproduzir e diagnosticar o backend, mas ROCm/llama.cpp é o ponto de partida recomendado.
 
 ```bash
 export VLLM_HOST=http://127.0.0.1:8000
@@ -305,7 +335,7 @@ profundidade de 131072 exatamente pelos ~100 tokens que a sonda gera. Como o cor
 treinado impede simplesmente pedir mais, a profundidade útil da classe 128k é **130048**:
 
 ```bash
-.venv/bin/homebench run --provider llamacpp --host http://127.0.0.1:8081 --no-quality \
+.venv/bin/homebench run --provider llamacpp --host http://127.0.0.1:8080 --no-quality \
   --depths 0,8192,32768,130048 -m bench-gemma4-e2b-128k
 ```
 
@@ -340,7 +370,7 @@ caminho do `--model` e mede o GGUF. Como o servidor roda em container, o caminho
 (`/models/...`) não existe deste lado do mount; diga onde é no host:
 
 ```bash
-export HOMEBENCH_MODEL_DIR=/home/ai-models
+export HOMEBENCH_MODEL_DIR=/home/eskudo/ai-models
 ```
 
 Sem essa variável a coluna fica **em branco** — nunca um número inventado. Se o modelo for um
@@ -374,33 +404,34 @@ salvo registra o argv efetivo. Use `--label` para marcar:
 ```
 
 > Precedência dos parâmetros: flag explícita > `load-params.json` > preset do servidor >
-> heurística > default do llama.cpp. Hoje o router tem preset para tudo em `/home/ai-models`,
+> heurística > default do llama.cpp. Hoje o router tem preset para os modelos principais em `/home/eskudo/ai-models`,
 > então sem o `load-params.json` ele usa o preset.
 
 ---
 
 ## 7. Comparar Vulkan vs ROCm
 
-Os dois backends rodam sobre a mesma GPU. Rode o mesmo modelo nos dois hosts e compare:
+Os testes históricos favoreceram ROCm. O Compose atual não sobe Vulkan; para reavaliar esse
+resultado, disponibilize-o em outra porta e rode exatamente o mesmo GGUF e preset nos dois hosts. Use
+`homebench models` em cada host para descobrir os ids que apontam para o mesmo arquivo; eles podem
+ter nomes diferentes. Depois substitua os placeholders abaixo:
 
 ```bash
 mkdir -p benchmark-results
 
-.venv/bin/homebench run --provider llamacpp --host http://127.0.0.1:8080 \
-  --no-quality -m qwen35-4b --label "vulkan" \
+.venv/bin/homebench run --provider llamacpp --host URL_DO_ROUTER_VULKAN \
+  --no-quality --depths 0,8192,32768 -m ID_VULKAN_DO_MESMO_GGUF --label "vulkan" \
   --json benchmark-results/vulkan.json
 
-.venv/bin/homebench run --provider llamacpp --host http://127.0.0.1:8081 \
-  --no-quality -m qwen2.5-7b-instruct-q4_k_m-rocm --label "rocm" \
+.venv/bin/homebench run --provider llamacpp --host http://127.0.0.1:8080 \
+  --no-quality --depths 0,8192,32768 -m ID_ROCM_DO_MESMO_GGUF --label "rocm" \
   --json benchmark-results/rocm.json
-
-.venv/bin/homebench diff
 ```
 
-> Atenção: os ids de modelo diferem entre os hosts (o ROCm tem sufixo `-rocm` e só 2 modelos).
-> A comparação só é justa se os **dois hosts rodarem o mesmo build** do llama.cpp — hoje ambos
-> estão em `b10664`, então está ok. Se divergirem, você está medindo o build tanto quanto o
-> backend.
+Não use `homebench diff` diretamente quando os ids diferirem: ele correlaciona resultados pelo
+nome do modelo. Nesse caso, compare os dois JSONs ou normalize os ids antes. Confira também o
+argv efetivo salvo no resultado. A comparação só é justa se ambos rodarem o mesmo build do
+llama.cpp; se divergirem, você estará medindo o build junto com o backend.
 
 ---
 
@@ -459,4 +490,4 @@ HOMEBENCH_LIVE=1 .venv/bin/python -m pytest -q tests/test_live_router.py
 
 Ele carrega o menor modelo, gera um texto curto, descarrega e **restaura o estado inicial** dos
 routers ao terminar (mesmo se falhar). Variáveis opcionais: `HOMEBENCH_LIVE_MODEL` (fixar o
-modelo), `HOMEBENCH_LIVE_MODEL_DIR` (default `/home/ai-models`).
+modelo), `HOMEBENCH_LIVE_MODEL_DIR` (use `/home/eskudo/ai-models` neste host).
