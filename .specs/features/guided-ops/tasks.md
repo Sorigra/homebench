@@ -130,11 +130,11 @@ T15 -> T16
 **Tools**: MCP: NONE · Skill: tlc-spec-driven
 
 **Done when**:
-- [ ] Env vazia recebe host / model_dir / chave lida do arquivo
-- [ ] Env já definida não é sobrescrita
-- [ ] Arquivo da chave ausente ⇒ `LLAMACPP_API_KEY` não é setada
-- [ ] Valor da chave não aparece no JSON salvo
-- [ ] Gate: `.venv/bin/python -m pytest -q` exit 0
+- [x] Env vazia recebe host / model_dir / chave lida do arquivo
+- [x] Env já definida não é sobrescrita
+- [x] Arquivo da chave ausente ⇒ `LLAMACPP_API_KEY` não é setada
+- [x] Valor da chave não aparece no JSON salvo
+- [x] Gate: `.venv/bin/python -m pytest -q` exit 0
 
 **Tests**: unit
 **Gate**: quick

@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
 from .history import default_home
+
+HOST_ENV = "LLAMACPP_HOST"
+API_KEY_ENV = "LLAMACPP_API_KEY"
+MODEL_DIR_ENV = "HOMEBENCH_MODEL_DIR"
 
 
 @dataclass
@@ -16,6 +20,28 @@ class HomebenchConfig:
     api_key_file: str = ""
     model_dir: str = ""
     last_plan: Optional[dict] = field(default=None)
+
+
+def read_api_key(path: str) -> Optional[str]:
+    if not path or not os.path.isfile(path):
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            content = f.read().strip()
+    except OSError:
+        return None
+    return content or None
+
+
+def apply_to_environ(cfg: HomebenchConfig) -> None:
+    if not os.environ.get(HOST_ENV) and cfg.host:
+        os.environ[HOST_ENV] = cfg.host
+    if not os.environ.get(MODEL_DIR_ENV) and cfg.model_dir:
+        os.environ[MODEL_DIR_ENV] = cfg.model_dir
+    if not os.environ.get(API_KEY_ENV) and cfg.api_key_file:
+        key = read_api_key(cfg.api_key_file)
+        if key:
+            os.environ[API_KEY_ENV] = key
 
 
 def _config_path(home: Optional[str] = None) -> str:

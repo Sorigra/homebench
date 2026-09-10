@@ -62,3 +62,77 @@ def test_save_round_trip(monkeypatch, tmp_path):
     assert loaded.api_key_file == original.api_key_file
     assert loaded.model_dir == original.model_dir
     assert loaded.last_plan == original.last_plan
+
+
+def test_read_api_key_strips_content(tmp_path):
+    key_file = tmp_path / "key.txt"
+    key_file.write_text("  sk-two-keys  \n")
+    assert config.read_api_key(str(key_file)) == "sk-two-keys"
+
+
+def test_read_api_key_missing_file_returns_none(tmp_path):
+    assert config.read_api_key(str(tmp_path / "missing.txt")) is None
+
+
+def _snapshot_env(names):
+    return {name: os.environ.get(name) for name in names}
+
+
+def _restore_env(snapshot):
+    for name, value in snapshot.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
+
+
+def test_apply_to_environ_fills_empty_vars(monkeypatch, tmp_path):
+    env_names = (config.HOST_ENV, config.API_KEY_ENV, config.MODEL_DIR_ENV)
+    saved = _snapshot_env(env_names)
+    try:
+        key_file = tmp_path / "api-key.txt"
+        key_file.write_text("sk-from-file")
+        for name in env_names:
+            monkeypatch.delenv(name, raising=False)
+        cfg = HomebenchConfig(
+            host="http://10.0.0.1:8080",
+            api_key_file=str(key_file),
+            model_dir="/data/two-models",
+        )
+        config.apply_to_environ(cfg)
+        assert os.environ[config.HOST_ENV] == "http://10.0.0.1:8080"
+        assert os.environ[config.API_KEY_ENV] == "sk-from-file"
+        assert os.environ[config.MODEL_DIR_ENV] == "/data/two-models"
+    finally:
+        _restore_env(saved)
+
+
+def test_apply_to_environ_does_not_overwrite_existing(monkeypatch, tmp_path):
+    key_file = tmp_path / "api-key.txt"
+    key_file.write_text("sk-from-file")
+    monkeypatch.setenv(config.HOST_ENV, "http://existing:8080")
+    monkeypatch.setenv(config.API_KEY_ENV, "sk-existing")
+    monkeypatch.setenv(config.MODEL_DIR_ENV, "/existing/models")
+    cfg = HomebenchConfig(
+        host="http://10.0.0.1:8080",
+        api_key_file=str(key_file),
+        model_dir="/data/two-models",
+    )
+    config.apply_to_environ(cfg)
+    assert os.environ[config.HOST_ENV] == "http://existing:8080"
+    assert os.environ[config.API_KEY_ENV] == "sk-existing"
+    assert os.environ[config.MODEL_DIR_ENV] == "/existing/models"
+
+
+def test_apply_to_environ_skips_api_key_when_file_missing(monkeypatch, tmp_path):
+    env_names = (config.HOST_ENV, config.API_KEY_ENV, config.MODEL_DIR_ENV)
+    saved = _snapshot_env(env_names)
+    try:
+        for name in env_names:
+            monkeypatch.delenv(name, raising=False)
+        cfg = HomebenchConfig(api_key_file=str(tmp_path / "missing.txt"))
+        config.apply_to_environ(cfg)
+        assert config.API_KEY_ENV not in os.environ
+    finally:
+        _restore_env(saved)
+
