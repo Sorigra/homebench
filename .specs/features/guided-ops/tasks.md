@@ -246,10 +246,10 @@ T15 -> T16
 **Tools**: MCP: NONE · Skill: tlc-spec-driven
 
 **Done when**:
-- [ ] Router up: host, `reachable=True`, `build_info`, **dois** residentes
-- [ ] Rede caída / 401: `reachable=False`, painel-consumível, secret `sk-secret` não está em `error`
-- [ ] Testes `pytest-httpx` em `tests/test_ops.py`
-- [ ] Gate: `.venv/bin/python -m pytest -q` exit 0
+- [x] Router up: host, `reachable=True`, `build_info`, **dois** residentes
+- [x] Rede caída / 401: `reachable=False`, painel-consumível, secret `sk-secret` não está em `error`
+- [x] Testes `pytest-httpx` em `tests/test_ops.py`
+- [x] Gate: `.venv/bin/python -m pytest -q` exit 0
 
 **Tests**: unit
 **Gate**: quick
