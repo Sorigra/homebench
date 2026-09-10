@@ -9,6 +9,7 @@ from typing import List, Optional
 from rich.console import Console
 
 from . import __version__
+from .config import apply_to_environ, load
 from .models import ModelInfo
 from .providers import ProviderError, detect_provider, get_provider
 from .quality import LLMJudge
@@ -603,6 +604,25 @@ def cmd_diff(args, console: Console) -> int:
     return 0
 
 
+def cmd_panel(
+    args,
+    console: Console,
+    *,
+    stdin_is_tty: Optional[bool] = None,
+    stdout_is_tty: Optional[bool] = None,
+) -> int:
+    if stdin_is_tty is None:
+        stdin_is_tty = sys.stdin.isatty()
+    if stdout_is_tty is None:
+        stdout_is_tty = sys.stdout.isatty()
+    if not (stdin_is_tty and stdout_is_tty):
+        console.print(
+            "[red]error:[/red] o painel precisa de um terminal interativo."
+        )
+        return 1
+    return 0
+
+
 def cmd_doctor(args, console: Console) -> int:
     from rich.table import Table
 
@@ -858,6 +878,7 @@ def _should_use_tui(args, console: Console) -> bool:
 def main(argv: Optional[List[str]] = None) -> int:
     if argv is None:
         argv = sys.argv[1:]
+    apply_to_environ(load())
     parser = build_parser()
     args = parser.parse_args(_inject_default_command(argv))
     console = Console()
@@ -872,7 +893,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     if command == "doctor":
         return cmd_doctor(args, console)
     if command == "panel":
-        return 0
+        return cmd_panel(args, console)
     if command == "history":
         return cmd_history(args, console)
     if command == "diff":

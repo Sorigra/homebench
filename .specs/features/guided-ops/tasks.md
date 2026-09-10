@@ -313,11 +313,11 @@ T15 -> T16
 **Tools**: MCP: NONE · Skill: tlc-spec-driven
 
 **Done when**:
-- [ ] `build_parser` aceita `panel`
-- [ ] `cmd_panel` sem TTY retorna ≠ 0 e menciona terminal
-- [ ] `main` aplica config: env vazia recebe host do arquivo (teste com HOME isolado)
-- [ ] Testes em `tests/test_cli_panel.py`
-- [ ] Gate: `.venv/bin/python -m pytest -q` exit 0
+- [x] `build_parser` aceita `panel`
+- [x] `cmd_panel` sem TTY retorna ≠ 0 e menciona terminal
+- [x] `main` aplica config: env vazia recebe host do arquivo (teste com HOME isolado)
+- [x] Testes em `tests/test_cli_panel.py`
+- [x] Gate: `.venv/bin/python -m pytest -q` exit 0
 
 **Tests**: unit
 **Gate**: quick
