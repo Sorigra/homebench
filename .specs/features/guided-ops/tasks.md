@@ -199,12 +199,12 @@ T15 -> T16
 **Tools**: MCP: NONE · Skill: tlc-spec-driven
 
 **Done when**:
-- [ ] Dois model ids sobrevivem em `model_ids` (não só o primeiro)
-- [ ] Zero modelos ou zero depths ⇒ `problems()` não vazio
-- [ ] Os três tipos (só speed, só quality, ambos) são representáveis; default só speed
-- [ ] Depths gravados ordenados e únicos
-- [ ] Testes em `tests/test_plan.py`
-- [ ] Gate: `.venv/bin/python -m pytest -q` exit 0
+- [x] Dois model ids sobrevivem em `model_ids` (não só o primeiro)
+- [x] Zero modelos ou zero depths ⇒ `problems()` não vazio
+- [x] Os três tipos (só speed, só quality, ambos) são representáveis; default só speed
+- [x] Depths gravados ordenados e únicos
+- [x] Testes em `tests/test_plan.py`
+- [x] Gate: `.venv/bin/python -m pytest -q` exit 0
 
 **Tests**: unit
 **Gate**: quick
