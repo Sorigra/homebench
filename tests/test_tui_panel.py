@@ -106,6 +106,25 @@ def test_plan_screen_two_models_in_plan(monkeypatch, tmp_path):
     asyncio.run(scenario())
 
 
+def test_plan_empty_catalog_shows_no_models_and_refuses_run(monkeypatch, tmp_path):
+    home = str(tmp_path / "home")
+    monkeypatch.setenv("HOMEBENCH_HOME", home)
+    status = RouterStatus(host=HOST, reachable=True)
+
+    async def scenario():
+        app = PanelApp(status=status, model_ids=[], home=home)
+        async with app.run_test() as pilot:
+            await _open_plan(app, pilot)
+            assert len(list(app.query("#model-list Checkbox"))) == 0
+            await pilot.click("#run-btn")
+            await pilot.pause(0.05)
+            msg = app.query_one("#plan-message", Static)
+            assert "modelo" in str(msg.render()).lower()
+            assert app.result is None
+
+    asyncio.run(scenario())
+
+
 def test_plan_run_with_zero_models_shows_message_and_stays(monkeypatch, tmp_path):
     home = str(tmp_path / "home")
     monkeypatch.setenv("HOMEBENCH_HOME", home)

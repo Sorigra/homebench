@@ -136,3 +136,39 @@ def test_setup_defaults_creates_launcher_wrapper(monkeypatch, tmp_path):
     assert wrapper.is_file()
     text = wrapper.read_text()
     assert str(REPO_ROOT / ".venv" / "bin" / "homebench") in text
+
+
+def test_setup_interactive_prompts_use_defaults_on_enter(monkeypatch, tmp_path):
+    home, bench_home = _isolated_env(monkeypatch, tmp_path)
+
+    result = subprocess.run(
+        ["bash", str(SETUP_SH)],
+        cwd=str(REPO_ROOT),
+        env={
+            **os.environ,
+            "HOME": str(home),
+            "HOMEBENCH_HOME": str(bench_home),
+            "HOMEBENCH_SETUP_SKIP_PIP": "1",
+        },
+        input="\n\n\n",
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    data = json.loads((bench_home / "config.json").read_text())
+    assert data["host"] == "http://127.0.0.1:8080"
+    assert data["api_key_file"] == str(home / "llm-server" / "llama" / "api-key.txt")
+    assert data["model_dir"] == "/home/eskudo/ai-models"
+
+
+def test_setup_prints_venv_path_when_launcher_dir_not_writable(monkeypatch, tmp_path):
+    home, bench_home = _isolated_env(monkeypatch, tmp_path)
+    local_dir = home / ".local"
+    local_dir.mkdir()
+    local_dir.chmod(0o555)
+
+    result = _run_setup("--defaults")
+    assert result.returncode == 0, result.stderr
+    venv_bin = str(REPO_ROOT / ".venv" / "bin" / "homebench")
+    assert venv_bin in (result.stdout + result.stderr)
+    assert (bench_home / "config.json").is_file()

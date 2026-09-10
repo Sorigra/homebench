@@ -90,15 +90,20 @@ install_launcher() {
     local wrapper="${bindir}/homebench"
     local target="${ROOT}/.venv/bin/homebench"
     if ! mkdir -p "$bindir" 2>/dev/null; then
-        echo "setup.sh: could not create ${bindir}; skipping launcher" >&2
+        echo "setup.sh: could not create ${bindir}; use ${target}" >&2
         return 0
     fi
-    cat > "$wrapper" <<EOF
+    if ! cat > "$wrapper" <<EOF
 #!/usr/bin/env bash
 exec "${target}" "\$@"
 EOF
+    then
+        echo "setup.sh: could not install launcher at ${wrapper}; use ${target}" >&2
+        rm -f "$wrapper"
+        return 0
+    fi
     if ! chmod +x "$wrapper" 2>/dev/null; then
-        echo "setup.sh: could not install launcher at ${wrapper}" >&2
+        echo "setup.sh: could not install launcher at ${wrapper}; use ${target}" >&2
         rm -f "$wrapper"
         return 0
     fi
