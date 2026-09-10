@@ -449,9 +449,9 @@ T15 -> T16
 **Tools**: MCP: NONE · Skill: tlc-spec-driven
 
 **Done when**:
-- [ ] Primeiras 40 linhas citam `setup.sh` e o painel
-- [ ] `throughput` aparece só depois dessa seção
-- [ ] Gate: `.venv/bin/python -m pytest -q` exit 0 (anti-regressão)
+- [x] Primeiras 40 linhas citam `setup.sh` e o painel
+- [x] `throughput` aparece só depois dessa seção
+- [x] Gate: `.venv/bin/python -m pytest -q` exit 0 (anti-regressão)
 
 **Tests**: none
 **Gate**: build

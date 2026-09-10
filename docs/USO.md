@@ -1,48 +1,43 @@
 # Como usar o homebench (fork Strix Halo)
 
-Guia prático para rodar o `homebench` **neste ambiente**: mini PC AMD Strix Halo, com o
-llama.cpp em **modo router** dentro do Docker (`~/llm-server/llama/docker-compose.yml`).
+## Caminho feliz: `setup.sh` e o painel
 
-- **`llama-rocm`** → `http://127.0.0.1:8080`
-- O backend Vulkan não faz parte do Compose ativo; resultados anteriores ficam apenas como histórico.
-- Modelos no host em `/home/eskudo/ai-models`, montados como `/models` no container.
-- Chave da API em `~/llm-server/llama/api-key.txt`.
+A forma mais simples de começar nesta fork é o instalador e o **painel BIOS** no terminal:
 
-> O foco desta fork é **performance bruta** (tok/s, TTFT, memória). O teste de qualidade
-> é secundário — na maioria das vezes você vai querer `--no-quality`.
+```bash
+cd ~/homebench
+./setup.sh --defaults
+homebench
+```
 
-### Estado atual dos backends
+O `./setup.sh --defaults` cria o `.venv`, instala o pacote, grava
+`$HOMEBENCH_HOME/config.json` (host, caminho da chave, diretório de modelos) e tenta colocar
+`homebench` em `~/.local/bin`. Se o router estiver fora do ar, a instalação **não** é desfeita.
 
-Nos testes feitos **neste Strix Halo**, Vulkan e vLLM não apresentaram bom desempenho em relação
-ao caminho ROCm/llama.cpp. Isso é uma observação preliminar deste ambiente, não uma conclusão
-geral sobre essas tecnologias: versões, flags, quantização, contexto, concorrência e o próprio
-modelo alteram muito o resultado. Para uso cotidiano, comece pelo router ROCm (`:8080`). Use
-Vulkan e vLLM para investigação ou comparação controlada e guarde o JSON de cada execução.
+Com argv vazio num TTY, `homebench` abre o **painel** em vez de disparar o benchmark direto.
+Use `homebench panel` para abrir o painel explicitamente. Sem TTY (CI, pipes), o default continua
+sendo `homebench run`.
 
-Uma comparação válida deve manter iguais: arquivo/pesos do modelo, quantização, profundidades,
-tokens de saída, concorrência, build do backend e argumentos efetivos. Compare `Prefill tok/s`,
-`Decode tok/s` e TTFT separadamente; um único número de “tok/s” pode esconder gargalos distintos.
+No painel:
 
-### Fluxo recomendado para alertas SIEM
+- a faixa mostra o host do router e `up`/`down`, build e modelos residentes;
+- **Planejar** — marque dois ou mais modelos, profundidades (`0`, `8192`, `32768`) e o tipo
+  de teste (só velocidade, só qualidade, ou ambos);
+- **Doctor** e **Histórico** — leitura do diagnóstico e dos runs salvos, sem HTTP de load/unload;
+- **Rodar** — confirma descarregar modelos fora do plano; depois abre o leaderboard existente.
 
-Use duas camadas depois de deduplicar e correlacionar eventos por entidade e janela de tempo:
+O último plano válido fica em `config.json`. Flags avançadas (`run`, `--depths`, providers
+alternativos) vêm nas seções abaixo.
 
-1. `gemma4-e2b` faz triagem concorrente e retorna JSON curto. Escalone alertas críticos/altos,
-   inéditos, contraditórios, multi-fonte ou com baixa confiança; feche automaticamente apenas
-   benignos que coincidam com allowlist, CMDB e janela de mudança.
-2. `qwen3.8-27b-unsloth` investiga os incidentes escalonados, recebendo o pacote correlacionado,
-   evidências, contexto do ativo e runbooks — não cada evento cru.
-
-Em 2026-09-10, no conjunto local de cinco cenários, Gemma obteve 22/25, JSON válido em 5/5 e
-2,41 s por alerta (87,3 tok/s). Qwen `UD-Q4_K_XL`, com raciocínio médio e MTP interno, obteve
-25/25 e JSON válido em 5/5, mas levou 40,35 s por investigação (25,0 tok/s). Foundation-Sec e
-Ornith permanecem experimentais até entregarem o contrato estruturado dentro do orçamento.
+> O foco desta fork é **performance bruta** (tok/s, TTFT, memória). O painel assume velocidade
+> por padrão; qualidade é opcional no Planejar.
 
 ---
 
 ## 1. Instalação
 
-Já está instalado no repo (`.venv/`). Para recriar do zero:
+Preferência: `./setup.sh` (interativo) ou `./setup.sh --defaults` (sem prompts). Para recriar
+manualmente:
 
 ```bash
 cd ~/homebench
@@ -53,6 +48,25 @@ python3 -m venv .venv
 
 O comando é `.venv/bin/homebench` (ou `homebench` se o `.venv` estiver ativado com
 `source .venv/bin/activate`).
+
+### Ambiente Strix Halo (referência)
+
+- **`llama-rocm`** → `http://127.0.0.1:8080` (router llama.cpp)
+- Modelos no host em `/home/eskudo/ai-models`
+- Chave da API em `~/llm-server/llama/api-key.txt`
+
+Nos testes feitos **neste Strix Halo**, Vulkan e vLLM ficaram abaixo do ROCm/llama.cpp para
+uso cotidiano. Compare backends só com modelo, quantização, profundidades e build constantes.
+
+### Fluxo recomendado para alertas SIEM
+
+Use duas camadas depois de deduplicar e correlacionar eventos por entidade e janela de tempo:
+
+1. `gemma4-e2b` faz triagem concorrente e retorna JSON curto.
+2. `qwen3.8-27b-unsloth` investiga os incidentes escalonados com contexto e runbooks.
+
+Detalhes e números de 2026-09-10 permanecem no histórico do projeto; o painel não substitui
+esse fluxo — ele cobre instalação, status do router e benchmark local.
 
 ---
 
