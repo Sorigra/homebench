@@ -371,6 +371,18 @@ def _prepare_router_models(provider, models, args, console: Console):
         if params.origin not in _SENDABLE_ORIGINS:
             params = LoadParams(extra_args=[], origin=params.origin)
         outcome = manager.ensure_only(model.name, params, _authorise)
+        if outcome.ignored_args:
+            # Silence here would mean recording a measurement under parameters
+            # the router never applied. Some builds accept extra_args on
+            # /models/load, answer success, and load from the preset anyway.
+            console.print(
+                f"[yellow]warning:[/yellow] the router ignored these load "
+                f"parameters for {model.name}: "
+                + ", ".join(outcome.ignored_args)
+                + " — it loaded from its own preset instead, so this result "
+                "does NOT measure them. Change the preset file and restart the "
+                "router to test them."
+            )
         return outcome.effective_args
 
     return True, prepare

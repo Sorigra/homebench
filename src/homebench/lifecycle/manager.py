@@ -29,6 +29,46 @@ def _is_sublist(needle: List[str], haystack: List[str]) -> bool:
     return any(haystack[i:i + n] == needle for i in range(len(haystack) - n + 1))
 
 
+#: Long form for every short llama.cpp flag we may send, so a router that
+#: reports the resolved argv in long form is not mistaken for one that dropped
+#: the request.
+_LONG_FORM = {
+    "-ngl": "--n-gpu-layers", "-c": "--ctx-size", "-np": "--parallel",
+    "-fa": "--flash-attn", "-ctk": "--cache-type-k", "-ctv": "--cache-type-v",
+    "-b": "--batch-size", "-ub": "--ubatch-size", "-m": "--model",
+}
+
+
+def _missing_args(requested: List[str], resolved: List[str]) -> List[str]:
+    """Requested flags whose value did not survive into the resolved argv.
+
+    Some router builds accept ``extra_args`` on ``POST /models/load``, answer
+    ``{"success": true}``, and then load the model from the preset alone --
+    silently. The caller would otherwise record a measurement under parameters
+    that were never applied, which is worse than an error.
+
+    Only flag/value pairs are checked; a bare flag has no value to verify.
+    """
+    resolved = list(resolved or [])
+    missing: List[str] = []
+    req = list(requested or [])
+    for i, token in enumerate(req):
+        if not token.startswith("-") or i + 1 >= len(req):
+            continue
+        value = req[i + 1]
+        if value.startswith("-"):
+            continue
+        names = {token, _LONG_FORM.get(token, token)}
+        names |= {k for k, v in _LONG_FORM.items() if v == token}
+        applied = any(
+            resolved[j] in names and j + 1 < len(resolved) and resolved[j + 1] == value
+            for j in range(len(resolved))
+        )
+        if not applied:
+            missing.append(f"{token} {value}")
+    return missing
+
+
 def _args_satisfied(requested: List[str], resolved: List[str]) -> bool:
     """True when the loaded argv already carries every requested extra arg.
 
@@ -118,6 +158,15 @@ class ModelLifecycleManager:
             self.client.unload(victim)
 
         if plan.needs_load:
+            if plan.to_unload:
+                # The unloads above have been accepted but the router stops the
+                # instances asynchronously (MLC-15). Two distinct refusals come
+                # from loading too early: reloading the same model gets "model
+                # is already running", and loading a different one gets "model
+                # limit reached". The first needs those instances to be really
+                # gone; the second only needs a free slot.
+                self._wait_unloaded(plan.to_unload)
+                self._wait_for_capacity()
             self.client.load(model, list(params.extra_args) or None)
         try:
             self.client.wait_until_loaded(model)
@@ -126,10 +175,12 @@ class ModelLifecycleManager:
                 self._best_effort_unload(model)
             raise
 
+        effective = self._effective_args(model)
         return LifecycleOutcome(
             plan=plan,
-            effective_args=self._effective_args(model),
+            effective_args=effective,
             unloaded=list(plan.to_unload),
+            ignored_args=_missing_args(params.extra_args, effective),
         )
 
     # ------------------------------------------------------------------
@@ -137,6 +188,22 @@ class ModelLifecycleManager:
         """The argv the router resolved for ``model`` after loading (MLC-09)."""
         state = next((m for m in self.client.list_models() if m.id == model), None)
         return list(state.args) if state is not None else []
+
+    def _wait_unloaded(self, models: List[str]) -> None:
+        """Let the router actually stop the instances we just unloaded."""
+        waiter = getattr(self.client, "wait_until_unloaded", None)
+        if waiter is not None:
+            waiter(list(models))
+
+    def _wait_for_capacity(self) -> None:
+        """Let the router free the slots we just unloaded, when it can say so.
+
+        Guarded by ``getattr`` because the manager is written against any
+        client that speaks the protocol, and older ones have no such method.
+        """
+        waiter = getattr(self.client, "wait_for_capacity", None)
+        if waiter is not None:
+            waiter()
 
     def _best_effort_unload(self, model: str) -> None:
         try:

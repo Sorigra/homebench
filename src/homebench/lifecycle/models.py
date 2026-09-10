@@ -112,6 +112,10 @@ class LifecycleOutcome:
     plan: LifecyclePlan = field(default_factory=LifecyclePlan)
     effective_args: List[str] = field(default_factory=list)
     unloaded: List[str] = field(default_factory=list)
+    #: Requested load parameters the router accepted and then did not apply
+    #: (it answers ``{"success": true}`` and loads from the preset anyway).
+    #: Non-empty means the measurement does NOT reflect what was asked for.
+    ignored_args: List[str] = field(default_factory=list)
     #: True when the user declined the unload confirmation: nothing was
     #: unloaded, nothing was loaded, and the caller must not benchmark.
     aborted: bool = False
@@ -121,6 +125,7 @@ class LifecycleOutcome:
             "plan": self.plan.to_dict(),
             "effective_args": list(self.effective_args),
             "unloaded": list(self.unloaded),
+            "ignored_args": list(self.ignored_args),
             "aborted": self.aborted,
         }
 
@@ -131,5 +136,6 @@ class LifecycleOutcome:
             plan=LifecyclePlan.from_dict(d.get("plan", {})),
             effective_args=list(d.get("effective_args", []) or []),
             unloaded=list(d.get("unloaded", []) or []),
+            ignored_args=list(d.get("ignored_args", []) or []),
             aborted=bool(d.get("aborted", False)),
         )

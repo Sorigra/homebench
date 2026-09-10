@@ -171,3 +171,62 @@ def test_empty_override_for_model_falls_through():
 def test_heuristic_needs_both_hardware_and_file_bytes():
     assert resolve(_state(args=[]), hardware=_HW).origin == "default"
     assert resolve(_state(args=[]), file_bytes=3 * GB).origin == "default"
+
+
+# =====================================================================
+# Per-request context budget read off a resolved argv (PERF-14)
+# =====================================================================
+def test_usable_context_divides_the_cache_by_the_parallel_slots():
+    """The live trap: --ctx-size is the whole cache, not one request's share."""
+    from homebench.lifecycle.params import usable_context
+
+    budget = usable_context(["llama-server", "--ctx-size", "16384",
+                             "--parallel", "4"])
+
+    assert budget.limit == 4096
+    assert budget.source == "--ctx-size 16384 / --parallel 4"
+
+
+def test_usable_context_without_parallel_is_the_whole_cache():
+    from homebench.lifecycle.params import usable_context
+
+    budget = usable_context(["--ctx-size", "131072"])
+
+    assert budget.limit == 131072
+    assert budget.source == "--ctx-size 131072"
+
+
+def test_usable_context_accepts_the_short_flag_spellings():
+    from homebench.lifecycle.params import usable_context
+
+    assert usable_context(["-c", "32768", "-np", "2"]).limit == 16384
+
+
+def test_usable_context_is_unknown_without_a_ctx_size():
+    """Unknown must stay unknown: the server, not homebench, then decides."""
+    from homebench.lifecycle.params import usable_context
+
+    assert usable_context(["llama-server", "--n-gpu-layers", "999"]) is None
+    assert usable_context([]) is None
+    assert usable_context(None) is None
+
+
+def test_usable_context_treats_an_explicit_zero_as_unknown():
+    """--ctx-size 0 tells llama.cpp to take the context from the model file."""
+    from homebench.lifecycle.params import usable_context
+
+    assert usable_context(["--ctx-size", "0"]) is None
+
+
+def test_usable_context_ignores_an_unparseable_value():
+    from homebench.lifecycle.params import usable_context
+
+    assert usable_context(["--ctx-size", "big"]) is None
+    assert usable_context(["--ctx-size", "8192", "--parallel", "x"]).limit == 8192
+
+
+def test_usable_context_takes_the_last_occurrence_of_a_repeated_flag():
+    """llama.cpp resolves a repeated flag the same way."""
+    from homebench.lifecycle.params import usable_context
+
+    assert usable_context(["--ctx-size", "8192", "--ctx-size", "65536"]).limit == 65536

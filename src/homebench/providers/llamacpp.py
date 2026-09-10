@@ -89,6 +89,38 @@ class LlamaCppProvider(OpenAICompatibleProvider):
             return None
         return len(tokens)
 
+    def context_window(self, model: str) -> Optional[int]:
+        """Served context of ``model``, from ``GET /props?model=...``.
+
+        The router answers with the loaded instance's own
+        ``default_generation_settings.n_ctx``, which is the number that
+        actually refuses a too-long prompt: already divided by ``--parallel``
+        and already capped at the model's trained context. The launch argv
+        says neither -- a preset asking for 133120 on a model trained to
+        131072 serves 131072 and reports nothing about the difference.
+
+        Every failure answers ``None`` (not a router, model not resident, an
+        older build without the route). An unknown limit must stay unknown.
+        """
+        try:
+            r = httpx.get(f"{self.host}/props", params={"model": model},
+                          headers=self._headers(), timeout=_TOKENIZE_TIMEOUT)
+        except httpx.HTTPError:
+            return None
+        if r.status_code != 200:
+            return None
+        try:
+            data = r.json()
+        except ValueError:
+            return None
+        if not isinstance(data, dict):
+            return None
+        settings = data.get("default_generation_settings")
+        n_ctx = settings.get("n_ctx") if isinstance(settings, dict) else None
+        if not isinstance(n_ctx, int) or isinstance(n_ctx, bool) or n_ctx <= 0:
+            return None
+        return n_ctx
+
     def memory(self, model: str) -> MemoryMetrics:
         """Footprint of ``model``, taken from the GGUF the router resolved.
 

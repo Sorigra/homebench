@@ -123,3 +123,86 @@ def test_recorded_load_params_survive_the_json_round_trip():
     result = runner.run(provider.list_models())
     restored = json.loads(json.dumps(result.to_dict()))
     assert restored["config"]["load_params"]["smart:8b"] == ["-ngl", "42"]
+
+
+# =====================================================================
+# The argv the hook resolved also bounds the depth sweep (PERF-14)
+# =====================================================================
+def test_the_hooks_argv_bounds_the_depth_sweep_of_that_model():
+    """A depth the backend's per-slot context cannot hold never gets sent."""
+    provider = FakeProvider()
+    argv = {"fast:1b": ["--ctx-size", "16384", "--parallel", "4"],
+            "smart:8b": ["--ctx-size", "131072", "--parallel", "1"]}
+    runner = _runner(provider, lambda m: argv[m.name],
+                     run_quality=False, depths=[0, 8192])
+    result = runner.run(provider.list_models())
+
+    by_name = {r.model.name: r.depth_results for r in result.reports}
+    # 16384/4 = 4096 usable: the 8k depth cannot fit.
+    assert by_name["fast:1b"][1].skipped is not None
+    assert "server context is 4096" in by_name["fast:1b"][1].skipped
+    # 131072/1: it fits, so it is measured like any other depth.
+    assert by_name["smart:8b"][1].skipped is None
+
+
+def test_configured_load_params_bound_the_sweep_when_there_is_no_hook():
+    provider = FakeProvider()
+    runner = Runner(provider, RunConfig(
+        sample_rss=False, warmup=False, quick=False, run_quality=False,
+        depths=[0, 32768],
+        load_params={"fast:1b": ["--ctx-size", "8192"]},
+    ))
+    result = runner.run([provider.list_models()[0]])
+
+    assert result.reports[0].depth_results[1].skipped is not None
+
+
+def test_a_model_without_resolved_argv_sweeps_every_depth():
+    provider = FakeProvider()
+    runner = _runner(provider, lambda m: None, run_quality=False,
+                     depths=[0, 8192])
+    result = runner.run([provider.list_models()[0]])
+
+    assert [p.skipped for p in result.reports[0].depth_results] == [None, None]
+
+
+def test_the_served_context_window_wins_over_the_launch_argv():
+    """llama.cpp caps --ctx-size at the trained context and says nothing.
+
+    The argv here asks for 133120 and the backend serves 131072, so a 131072
+    depth (plus the 100 tokens the probe generates) does not fit. Trusting the
+    argv would send it anyway and collect an HTTP 400.
+    """
+    provider = FakeProvider()
+    provider.context_window = lambda model: 131072
+    runner = _runner(provider, lambda m: ["--ctx-size", "133120", "--parallel", "1"],
+                     run_quality=False, depths=[131072])
+    result = runner.run([provider.list_models()[0]])
+
+    skipped = result.reports[0].depth_results[0].skipped
+    assert skipped is not None
+    assert "server context is 131072" in skipped
+    assert "served by the backend" in skipped
+
+
+def test_the_argv_is_used_when_the_backend_cannot_report_its_context():
+    provider = FakeProvider()
+    provider.context_window = lambda model: None
+    runner = _runner(provider, lambda m: ["--ctx-size", "8192", "--parallel", "2"],
+                     run_quality=False, depths=[8192])
+    result = runner.run([provider.list_models()[0]])
+
+    assert "--ctx-size 8192 / --parallel 2" in result.reports[0].depth_results[0].skipped
+
+
+def test_a_backend_that_raises_on_context_window_does_not_fail_the_model():
+    def _boom(model):
+        raise RuntimeError("no props route here")
+
+    provider = FakeProvider()
+    provider.context_window = _boom
+    runner = _runner(provider, lambda m: None, run_quality=False, depths=[0])
+    result = runner.run([provider.list_models()[0]])
+
+    assert result.reports[0].error is None
+    assert result.reports[0].depth_results[0].skipped is None

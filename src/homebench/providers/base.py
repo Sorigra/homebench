@@ -87,6 +87,19 @@ class Provider(ABC):
         """
         return None
 
+    def context_window(self, model: str) -> Optional[int]:
+        """Tokens one request may use on ``model``, or ``None`` if unknown.
+
+        This is the *served* context, not the one the backend was asked for:
+        llama.cpp both splits its cache across parallel slots and caps it at
+        the model's trained context, and a caller reading only the launch
+        flags gets a number the server never honoured.
+
+        ``None`` means "this backend cannot say"; callers must then leave the
+        limit unknown rather than substitute a guess.
+        """
+        return None
+
     def warmup(self, model: str, *, timeout: float = 300.0) -> None:
         """Load a model into memory so later timings exclude load time."""
         self.generate(model, "ok", max_tokens=1, timeout=timeout)

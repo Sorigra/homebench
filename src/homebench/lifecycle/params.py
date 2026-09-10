@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import os
 import warnings
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, NamedTuple, Optional
 
 from .models import LoadParams, ModelState
 
@@ -111,3 +111,68 @@ def resolve(
         return LoadParams(extra_args=["-ngl", str(ngl)], origin="heuristic")
 
     return LoadParams(extra_args=[], origin="default")
+
+
+#: llama.cpp spellings of the two flags that decide how much context one
+#: request may actually use. ``--ctx-size`` is the size of the *whole* KV
+#: cache and ``--parallel`` is how many slots share it, so a request can only
+#: ever be as deep as ``ctx-size / parallel``.
+_CTX_FLAGS = ("--ctx-size", "-c", "--n-ctx")
+_PARALLEL_FLAGS = ("--parallel", "-np")
+
+
+class ContextBudget(NamedTuple):
+    """How deep one request may go on a given server.
+
+    ``limit`` is the per-slot context in tokens; ``source`` says where the
+    number came from, so a skipped depth explains *why* rather than only that
+    it was too deep.
+    """
+
+    limit: int
+    source: str
+
+
+def _flag_int(args: List[str], flags) -> Optional[int]:
+    """Last value given for any spelling of ``flags``, as an int, or ``None``.
+
+    The last occurrence wins, which is how llama.cpp itself resolves a flag
+    repeated on one command line.
+    """
+    found: Optional[int] = None
+    for i, token in enumerate(args or []):
+        if token in flags and i + 1 < len(args):
+            try:
+                found = int(args[i + 1])
+            except (TypeError, ValueError):
+                continue
+    return found
+
+
+def usable_context(args: Optional[List[str]]) -> Optional[ContextBudget]:
+    """Per-request context of a server started with ``args``, or ``None``.
+
+    ``None`` means "not knowable from this argv" -- no ``--ctx-size``, or an
+    explicit ``0``, which tells llama.cpp to take the context from the model
+    file. Callers must treat that as "no limit known" and let the server
+    decide, never as "no context".
+
+    The division by ``--parallel`` is the whole point: a 32768-token cache
+    split across two slots refuses a 20k-token prompt, and the error only
+    ever names the 16384 the request actually had (PERF-14).
+
+    This is an **upper bound**, not the truth: llama.cpp caps ``--ctx-size``
+    at the model's trained context, so a preset asking for 133120 on a model
+    trained to 131072 serves 131072 and says nothing. Prefer a server that
+    can report its own context (``Provider.context_window``) and keep this
+    for the servers that cannot.
+    """
+    ctx = _flag_int(args, _CTX_FLAGS)
+    if not ctx or ctx <= 0:
+        return None
+    parallel = _flag_int(args, _PARALLEL_FLAGS) or 1
+    parallel = max(1, parallel)
+    source = f"--ctx-size {ctx}"
+    if parallel > 1:
+        source += f" / --parallel {parallel}"
+    return ContextBudget(limit=ctx // parallel, source=source)

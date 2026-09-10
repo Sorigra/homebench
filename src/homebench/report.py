@@ -174,9 +174,25 @@ def _prefill_cell(row: LeaderboardRow) -> str:
     return fmt_tps(row.prefill_tps)
 
 
+#: A skip reason has to fit a table cell. A backend error arrives as several
+#: lines of HTTP detail; the first line carries the cause and the rest pushes
+#: the leaderboard off the screen. The full text is kept in the run's warnings
+#: and in the saved JSON, so nothing is lost by trimming the cell.
+_SKIP_REASON_CHARS = 72
+
+
+def _short_skip_reason(reason: str) -> str:
+    first = str(reason).strip().splitlines()[0].strip() if str(reason).strip() else ""
+    if len(first) > _SKIP_REASON_CHARS:
+        return first[:_SKIP_REASON_CHARS - 1].rstrip() + "\u2026"
+    return first
+
+
 def _decode_cell(row: LeaderboardRow, *, include_skip_reason: bool = True) -> str:
     if row.skipped:
-        return f"skipped: {row.skipped}" if include_skip_reason else "skipped"
+        if not include_skip_reason:
+            return "skipped"
+        return f"skipped: {_short_skip_reason(row.skipped)}"
     return fmt_tps(row.decode_tps)
 
 

@@ -64,6 +64,12 @@ class FakeRouter:
         if state is not None:
             state.status = "unloaded"
 
+    def wait_for_capacity(self):
+        self.calls.append(("capacity",))
+
+    def wait_until_unloaded(self, models):
+        self.calls.append(("wait_unloaded", list(models)))
+
     def wait_until_loaded(self, model, timeout=300.0):
         self.calls.append(("wait", model))
         if self.wait_error is not None:
@@ -310,3 +316,133 @@ def test_ensure_only_waits_for_a_target_that_is_already_loading():
         )
     assert "wait" in _kinds(router)
     assert "load" not in _kinds(router)  # no redundant load POST
+
+
+# =====================================================================
+# MLC-15: wait for the router to release the slots before loading
+# =====================================================================
+def test_load_waits_for_capacity_after_unloading():
+    router = _mutable([_state("target", "unloaded"), _state("resident", "loaded")])
+    ModelLifecycleManager(router).ensure_only(
+        "target", LoadParams(), lambda plan: True
+    )
+    kinds = _kinds(router)
+    assert kinds.index("capacity") > kinds.index("unload")
+    assert kinds.index("capacity") < kinds.index("load")
+
+
+def test_no_capacity_wait_when_nothing_was_unloaded():
+    router = _mutable([_state("target", "unloaded")])
+    ModelLifecycleManager(router).ensure_only(
+        "target", LoadParams(), lambda plan: True
+    )
+    assert "capacity" not in _kinds(router)
+
+
+def test_no_capacity_wait_when_the_target_is_already_loaded():
+    router = _mutable([_state("target", "loaded"), _state("resident", "loaded")])
+    ModelLifecycleManager(router).ensure_only(
+        "target", LoadParams(), lambda plan: True
+    )
+    assert "capacity" not in _kinds(router)
+
+
+def test_capacity_wait_is_skipped_on_a_client_without_it():
+    """The manager works against any client that speaks the protocol."""
+    router = _mutable([_state("target", "unloaded"), _state("resident", "loaded")])
+    saved = FakeRouter.wait_for_capacity
+    del FakeRouter.wait_for_capacity
+    try:
+        outcome = ModelLifecycleManager(router).ensure_only(
+            "target", LoadParams(), lambda plan: True
+        )
+    finally:
+        FakeRouter.wait_for_capacity = saved
+    assert outcome.aborted is False
+    assert "capacity" not in _kinds(router)
+
+
+# =====================================================================
+# MLC-15: the same model reloaded needs its instance really gone
+# =====================================================================
+def test_reload_waits_for_the_old_instance_to_stop_before_loading():
+    """A free slot is not enough: "model is already running" is a different
+    refusal from "model limit reached"."""
+    router = _mutable([_state("target", "loaded", ["-fa", "on"])])
+    ModelLifecycleManager(router).ensure_only(
+        "target", LoadParams(extra_args=["-fa", "off"], origin="json"),
+        lambda plan: True,
+    )
+    kinds = _kinds(router)
+    assert kinds.index("wait_unloaded") > kinds.index("unload")
+    assert kinds.index("wait_unloaded") < kinds.index("load")
+    waited = next(c[1] for c in router.calls if c[0] == "wait_unloaded")
+    assert "target" in waited
+
+
+def test_no_unload_wait_when_nothing_was_unloaded():
+    router = _mutable([_state("target", "unloaded")])
+    ModelLifecycleManager(router).ensure_only(
+        "target", LoadParams(), lambda plan: True
+    )
+    assert "wait_unloaded" not in _kinds(router)
+
+
+def test_unload_wait_is_skipped_on_a_client_without_it():
+    router = _mutable([_state("target", "unloaded"), _state("resident", "loaded")])
+    saved = FakeRouter.wait_until_unloaded
+    del FakeRouter.wait_until_unloaded
+    try:
+        outcome = ModelLifecycleManager(router).ensure_only(
+            "target", LoadParams(), lambda plan: True
+        )
+    finally:
+        FakeRouter.wait_until_unloaded = saved
+    assert outcome.aborted is False
+
+
+# =====================================================================
+# The router that accepts extra_args and then ignores them
+# =====================================================================
+class IgnoringRouter(FakeRouter):
+    """Answers success to load() but keeps the preset argv (build 10878)."""
+
+    def load(self, model, extra_args=None):
+        self.calls.append(("load", model, list(extra_args or [])))
+        state = self._find(model)
+        state.status = "loaded"   # note: extra_args deliberately dropped
+
+
+def test_ignored_load_params_are_reported():
+    router = IgnoringRouter(
+        [_state("target", "unloaded", ["--cache-type-k", "q8_0"])],
+        allow_mutations=True,
+    )
+    outcome = ModelLifecycleManager(router).ensure_only(
+        "target",
+        LoadParams(extra_args=["-ctk", "f16", "-fa", "off"], origin="json"),
+        lambda plan: True,
+    )
+    assert outcome.ignored_args == ["-ctk f16", "-fa off"]
+
+
+def test_applied_load_params_are_not_reported_as_ignored():
+    router = _mutable([_state("target", "unloaded")])
+    outcome = ModelLifecycleManager(router).ensure_only(
+        "target", LoadParams(extra_args=["-ngl", "99"], origin="json"),
+        lambda plan: True,
+    )
+    assert outcome.ignored_args == []
+
+
+def test_long_form_in_the_resolved_argv_counts_as_applied():
+    """The router reports long flags; we may have asked with short ones."""
+    router = IgnoringRouter(
+        [_state("target", "unloaded", ["--flash-attn", "off"])],
+        allow_mutations=True,
+    )
+    outcome = ModelLifecycleManager(router).ensure_only(
+        "target", LoadParams(extra_args=["-fa", "off"], origin="json"),
+        lambda plan: True,
+    )
+    assert outcome.ignored_args == []

@@ -16,6 +16,7 @@ import statistics
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, List, Optional, Tuple
 
+from ..lifecycle.params import ContextBudget
 from ..models import DepthMetrics, SpeedMetrics
 from ..providers.base import Provider, ProviderError
 
@@ -171,6 +172,30 @@ _TERMINAL_DEPTH_HINTS = (
 )
 
 
+#: Multiplier over the projected prefill time before a deep generation is
+#: called hung. Prefill slows down as the context grows -- the live router
+#: loses about a fifth of its rate between 8k and 32k -- so the projection
+#: from a shallower depth is always optimistic and needs real headroom.
+_PREFILL_SAFETY = 3.0
+
+
+def _timeout_for(depth: int, base: float, prefill_tps: Optional[float]) -> float:
+    """Request timeout for ``depth``, projected from a measured prefill rate.
+
+    ``base`` (``cfg.timeout``) is the floor and covers decode plus overhead.
+    A 128k prompt legitimately takes ten minutes to prefill on a 27B, and a
+    fixed 300 s ceiling turns that into a timeout skip that reads exactly like
+    a broken backend (PERF-14). Projecting from the rate the sweep just
+    measured keeps the ceiling generous where the model is slow and tight
+    where it is fast, instead of inventing a per-model constant.
+
+    With no rate measured yet -- the shallowest depth -- ``base`` stands.
+    """
+    if depth <= 0 or not prefill_tps or prefill_tps <= 0:
+        return base
+    return base + (depth / prefill_tps) * _PREFILL_SAFETY
+
+
 def _is_context_overflow(message: str) -> bool:
     lowered = message.lower()
     return any(hint in lowered for hint in _OVERFLOW_HINTS)
@@ -223,6 +248,7 @@ def measure_at_depths(
     cfg: "RunConfig",
     warn: Optional[Callable[[str], None]] = None,
     on_depth: Optional[Callable[[int], None]] = None,
+    budget: Optional[ContextBudget] = None,
 ) -> DepthSweep:
     """Measure ``model`` once at every depth in ``depths``, in that order.
 
@@ -237,6 +263,13 @@ def measure_at_depths(
     model and only this model, the way the runner already isolates a backend
     that went away (MLC-11).
 
+    ``budget`` is the per-request context the server was started with, as
+    read off its resolved argv. When it is known, a depth that cannot fit is
+    skipped *before* the request is sent, with a reason that names the limit
+    and where it came from -- a wasted round trip that can only end in HTTP
+    400, answered with a wall of server error text, tells the user nothing
+    the argv did not already say.
+
     ``on_depth`` is called with each depth before it is measured. The
     default sweep is slow, and the renderers use it to show which depth is
     running so a long run does not read as a hang.
@@ -245,11 +278,25 @@ def measure_at_depths(
     tokenize = _tokenizer_for(provider, model)
     measured: List[Tuple[int, SpeedMetrics]] = []
 
+    last_prefill: Optional[float] = None
+
     for depth in depths:
         if on_depth is not None:
             on_depth(depth)
+
+        # The generated tokens share the context window with the prompt, so
+        # the depth that has to fit is the prompt plus what we ask it to write.
+        needed = depth + cfg.speed_max_tokens
+        if budget is not None and needed > budget.limit:
+            reason = (f"needs ~{needed} tokens, server context is "
+                      f"{budget.limit} ({budget.source})")
+            sweep.points.append(DepthMetrics(depth_requested=depth, skipped=reason))
+            _note(warn, f"{model}: depth {depth} skipped: {reason}")
+            continue
+
         prompt, _count = build_context_prompt(depth, tokenize,
                                               base_prompt=cfg.speed_prompt)
+        timeout = _timeout_for(depth, cfg.timeout, last_prefill)
         try:
             runs = [
                 provider.generate(
@@ -258,7 +305,7 @@ def measure_at_depths(
                     max_tokens=cfg.speed_max_tokens,
                     temperature=cfg.temperature,
                     seed=cfg.seed,
-                    timeout=cfg.timeout,
+                    timeout=timeout,
                     cache_prompt=False,
                 )
                 for _ in range(max(1, cfg.repeat))
@@ -289,6 +336,8 @@ def measure_at_depths(
             cache_hit_tokens=best.cache_hit_tokens,
         ))
         measured.append((depth, best.speed))
+        if best.speed.prefill_tps:
+            last_prefill = best.speed.prefill_tps
         if best.cache_hit_tokens > 0:
             _note(warn, f"{model}: depth {depth} prefill may be contaminated by a "
                         f"reused KV cache ({best.cache_hit_tokens} prompt tokens "

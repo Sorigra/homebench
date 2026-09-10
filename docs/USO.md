@@ -162,7 +162,7 @@ quantos modelos estão residentes).
 
 Antes de medir cada modelo, o `homebench`:
 
-1. Garante que **só aquele modelo** está residente (descarrega os outros — é o `--models-max 2`
+1. Garante que **só aquele modelo** está residente (descarrega os outros — é o `--models-max 3`
    do router que torna isso necessário: um segundo modelo disputando VRAM contamina o tok/s).
 2. Carrega o modelo se preciso e espera ficar `loaded` (até 300 s).
 3. Grava, junto com o resultado, o argv efetivo com que ele carregou.
@@ -177,6 +177,53 @@ Para pular a pergunta (uso automático / script):
 
 Num terminal não interativo sem `--force-unload`, ele **aborta** com uma mensagem em vez de
 descarregar por conta própria.
+
+### `model limit reached`: o slot que o router demora a liberar
+
+O router aceita no máximo `--models-max` instâncias residentes (3 neste deployment) e, ao
+atingir o teto, ele **recusa** a carga em vez de despejar o modelo mais antigo:
+
+```
+Router rejected /models/load for 'x': model limit reached, try again later
+```
+
+O `POST /models/unload` responde **antes** de o slot ser efetivamente liberado, então descarregar
+e carregar em seguida corria contra o router e podia bater nesse erro mesmo tendo acabado de
+liberar espaço. Depois de descarregar, o `homebench` agora espera o `GET /props` →
+`max_instances` bater com a contagem de `loaded` do `GET /v1/models` antes de carregar (até 60 s).
+
+A causa mais comum de encostar no teto era ter **seções de preset duplicadas** — uma seção de
+benchmark apontando para o mesmo `.gguf` de uma seção de produção cria um **segundo id**, que
+ocupa um slot e uma cópia inteira da memória. Uma seção por `.gguf`, com o nome igual ao id que o
+`--models-dir` já descobre, evita as duas coisas.
+
+### O router pode ignorar `load-params.json` — e agora ele avisa
+
+`POST /models/load` aceita um campo `extra_args`, e é por ele que o
+`$HOMEBENCH_HOME/load-params.json` tenta testar parâmetros de carga sem mexer no
+arquivo de presets. **No build `b10878` o router aceita esse campo, responde
+`{"success": true}` e carrega o modelo só com o preset**, sem aplicar nada:
+
+```
+$ curl -X POST .../models/load -d '{"model":"qwen3.8-27b-unsloth",
+    "extra_args":["--cache-type-k","f16","--flash-attn","off"]}'
+{"success":true}
+$ # ... e o argv resolvido continua:
+--cache-type-k q8_0 --cache-type-v q8_0 --flash-attn on
+```
+
+Sem verificação isso é pior que um erro: o benchmark roda, grava um número e o
+rotula com parâmetros que nunca existiram. O `homebench` agora compara o que
+pediu com o argv que o router reporta depois de carregar e avisa:
+
+```
+warning: the router ignored these load parameters for qwen3.8-27b-unsloth:
+-ctk f16, -fa off — it loaded from its own preset instead, so this result does
+NOT measure them.
+```
+
+Para testar parâmetros de carga contra um router assim, edite o
+`presets-rocm.ini` e reinicie o container — o preset só é lido no boot.
 
 ---
 
@@ -210,6 +257,72 @@ em contexto ~zero. Também aceita uma lista customizada, na ordem dada:
 
 Um valor que excede a janela de contexto do modelo não derruba o run inteiro: aquela profundidade
 aparece pulada, com o motivo, e as demais seguem normalmente.
+
+### `--ctx-size` **não** é o contexto de uma requisição
+
+O `llama.cpp` reparte o cache KV entre os slots de `--parallel`. O que uma requisição pode usar é
+`ctx-size / parallel`, e a mensagem de erro do servidor só cita o resultado da divisão, nunca a
+divisão:
+
+| preset | `ctx-size` | `parallel` | contexto por requisição |
+| --- | --- | --- | --- |
+| `foundation-sec-8b-reasoning-q8_0` | 32768 | 2 | **16384** |
+| `gemma4-e2b` | 16384 | 4 | **4096** |
+| `qwen3.8-27b-unsloth-mtp` | 131072 | 1 | **131072** |
+
+O `homebench` **pula a profundidade antes de enviar a requisição**, dizendo de onde veio o limite:
+
+```
+skipped: needs ~8292 tokens, server context is 4096 (--ctx-size 16384 / --parallel 4)
+```
+
+Sem isso a profundidade só falhava depois do round trip, e o motivo chegava como um corpo de HTTP
+400 de três linhas ocupando a tabela inteira.
+
+### De onde vem o limite: o servidor, não o argv
+
+O argv é um **teto pedido**, não o contexto servido. Além de dividir por `--parallel`, o
+`llama.cpp` ainda **corta o `ctx-size` no contexto treinado do modelo, em silêncio**: um preset
+pedindo `ctx-size = 133120` num `gemma4-e2b` (treinado a 131072) serve 131072 e não avisa nada.
+Quem lê só as flags de lançamento fica com um número que o servidor nunca honrou.
+
+Por isso o limite vem de `GET /props?model=<id>`, que devolve o `n_ctx` da instância carregada —
+já dividido pelos slots e já cortado no contexto treinado. Confirmado ao vivo:
+
+| modelo | `--ctx-size` | `--parallel` | `n_ctx` servido |
+| --- | --- | --- | --- |
+| `gemma4-e2b` | 16384 | 4 | **4096** |
+| `foundation-sec-8b-reasoning-q8_0` | 32768 | 2 | **16384** |
+| `qwen3.8-27b-unsloth-mtp` | 131072 | 1 | **131072** |
+
+O argv continua como reserva para backends que não sabem responder `/props`. Quando nenhum dos
+dois sabe, o limite fica desconhecido e a varredura roda igual a antes — o servidor decide, não o
+`homebench`.
+
+**Para medir a 128k** o preset precisa de `parallel = 1`, e a profundidade tem de caber junto com
+a resposta: prompt e resposta dividem a mesma janela, então uma janela de 131072 recusa uma
+profundidade de 131072 exatamente pelos ~100 tokens que a sonda gera. Como o corte no contexto
+treinado impede simplesmente pedir mais, a profundidade útil da classe 128k é **130048**:
+
+```bash
+.venv/bin/homebench run --provider llamacpp --host http://127.0.0.1:8081 --no-quality \
+  --depths 0,8192,32768,130048 -m bench-gemma4-e2b-128k
+```
+
+### Timeout nas profundidades grandes
+
+O `--timeout` (padrão 300 s) é o piso, não o teto. Um prefill de 128k leva minutos — o
+`qwen3.8-27b` mediu 141 s só para 32k — e um teto fixo transformaria isso num `skipped` por
+timeout indistinguível de um backend travado. A partir de agora a varredura **projeta** o timeout
+de cada profundidade a partir do prefill que ela mesma acabou de medir na profundidade anterior,
+com 3× de margem:
+
+| prefill medido | timeout a 131072 |
+| --- | --- |
+| 1121 tok/s (`foundation-sec-8b` q8_0) | ~651 s |
+| 233 tok/s (`qwen3.8-27b` Q4_K_M) | ~1988 s |
+
+Na profundidade mais rasa, sem nada medido ainda, vale o `--timeout` puro.
 
 ---
 

@@ -237,3 +237,118 @@ def test_the_shallowest_measured_depth_becomes_the_reported_speed():
     assert sweep.points[0].skipped is not None      # 32768 never measured
     assert sweep.speed is not None
     assert sweep.speed.tokens_per_sec == 95.1       # depth 0, asked last
+
+
+# =====================================================================
+# PERF-14: a depth that cannot fit is skipped before it is sent
+# =====================================================================
+def test_a_depth_beyond_the_context_budget_is_skipped_without_a_request():
+    from homebench.lifecycle.params import ContextBudget
+
+    rec = _Recorder(lambda i, p: _result(prompt_tokens=20, decode=50.0))
+    budget = ContextBudget(limit=4096, source="--ctx-size 16384 / --parallel 4")
+
+    sweep = measure_at_depths(rec, "gemma4-e2b", [0, 8192, 32768],
+                              cfg=_cfg(speed_max_tokens=100), budget=budget)
+
+    assert len(rec.calls) == 1                    # only depth 0 crossed the wire
+    assert sweep.points[1].skipped is not None
+    assert sweep.points[2].skipped is not None
+    assert "server context is 4096" in sweep.points[1].skipped
+    assert "--ctx-size 16384 / --parallel 4" in sweep.points[1].skipped
+
+
+def test_the_skip_reason_counts_the_generated_tokens_against_the_window():
+    """Prompt and completion share the window, so both have to fit."""
+    from homebench.lifecycle.params import ContextBudget
+
+    rec = _Recorder(lambda i, p: _result(prompt_tokens=8190, decode=50.0))
+    budget = ContextBudget(limit=8192, source="--ctx-size 8192")
+
+    sweep = measure_at_depths(rec, "m", [8192], cfg=_cfg(speed_max_tokens=100),
+                              budget=budget)
+
+    assert rec.calls == []
+    assert "needs ~8292 tokens" in sweep.points[0].skipped
+
+
+def test_a_depth_that_fits_the_budget_still_runs():
+    from homebench.lifecycle.params import ContextBudget
+
+    rec = _Recorder(lambda i, p: _result(prompt_tokens=8190, decode=42.0))
+    budget = ContextBudget(limit=131072, source="served by the backend")
+
+    sweep = measure_at_depths(rec, "m", [8192], cfg=_cfg(speed_max_tokens=100),
+                              budget=budget)
+
+    assert len(rec.calls) == 1
+    assert sweep.points[0].skipped is None
+    assert sweep.points[0].decode_tps == 42.0
+
+
+def test_an_unknown_budget_leaves_the_sweep_untouched():
+    rec = _Recorder(lambda i, p: _result(prompt_tokens=32700, decode=11.0))
+
+    sweep = measure_at_depths(rec, "m", [32768], cfg=_cfg(), budget=None)
+
+    assert len(rec.calls) == 1
+    assert sweep.points[0].skipped is None
+
+
+def test_a_skipped_depth_does_not_stop_the_remaining_depths():
+    """A shallow-then-deep-then-shallow order proves it is per depth."""
+    from homebench.lifecycle.params import ContextBudget
+
+    rec = _Recorder(lambda i, p: _result(prompt_tokens=20, decode=50.0))
+    budget = ContextBudget(limit=4096, source="served by the backend")
+
+    sweep = measure_at_depths(rec, "m", [0, 131072, 1024],
+                              cfg=_cfg(speed_max_tokens=100), budget=budget)
+
+    assert [p.skipped is None for p in sweep.points] == [True, False, True]
+
+
+# =====================================================================
+# PERF-14: the request timeout follows the depth, not a fixed ceiling
+# =====================================================================
+def test_the_deep_timeout_is_projected_from_the_measured_prefill_rate():
+    """A 128k prefill legitimately outlasts a flat 300 s ceiling."""
+    timeouts = []
+
+    class _Timed(_Recorder):
+        def generate(self, model, prompt, *, max_tokens=256, temperature=0.0,
+                     seed=None, on_token=None, timeout=300.0, cache_prompt=True):
+            timeouts.append(timeout)
+            return super().generate(model, prompt, max_tokens=max_tokens,
+                                    temperature=temperature, seed=seed,
+                                    on_token=on_token, timeout=timeout,
+                                    cache_prompt=cache_prompt)
+
+    # 200 tok/s prefill: 131072 tokens need ~655 s, well past the 300 s floor.
+    rec = _Timed(lambda i, p: _result(prompt_tokens=32000, decode=11.0,
+                                      prefill=200.0))
+
+    measure_at_depths(rec, "m", [0, 131072], cfg=_cfg(timeout=300.0))
+
+    assert timeouts[0] == 300.0                       # depth 0: the floor
+    assert timeouts[1] == pytest.approx(300.0 + (131072 / 200.0) * 3.0)
+
+
+def test_the_timeout_stays_at_the_floor_until_a_rate_has_been_measured():
+    timeouts = []
+
+    class _Timed(_Recorder):
+        def generate(self, model, prompt, *, max_tokens=256, temperature=0.0,
+                     seed=None, on_token=None, timeout=300.0, cache_prompt=True):
+            timeouts.append(timeout)
+            return super().generate(model, prompt, max_tokens=max_tokens,
+                                    temperature=temperature, seed=seed,
+                                    on_token=on_token, timeout=timeout,
+                                    cache_prompt=cache_prompt)
+
+    rec = _Timed(lambda i, p: _result(prompt_tokens=8190, decode=11.0,
+                                      prefill=None))
+
+    measure_at_depths(rec, "m", [8192, 32768], cfg=_cfg(timeout=120.0))
+
+    assert timeouts == [120.0, 120.0]

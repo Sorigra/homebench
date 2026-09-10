@@ -264,7 +264,29 @@ def test_decode_cell_can_hide_skip_reason_for_width_limited_tui():
     row = LeaderboardRow(rank=1, report=report, point=report.depth_results[0])
 
     assert _decode_cell(row, include_skip_reason=False) == "skipped"
-    assert _decode_cell(row) == f"skipped: {reason}"
+    assert _decode_cell(row).startswith("skipped: llamacpp generate failed:")
+
+
+def test_decode_cell_trims_a_multi_line_backend_error_to_its_first_line():
+    """A raw HTTP 400 body is several lines; only the cause belongs in a cell.
+
+    The untrimmed text is still kept in the report warnings and the saved
+    JSON, so trimming the cell loses nothing.
+    """
+    from homebench.report import LeaderboardRow, _decode_cell
+
+    reason = ("Client error '400 Bad Request' for url 'http://x/v1/chat'\n"
+              "For more information check: https://developer.mozilla.org/x\n"
+              "request (33088 tokens) exceeds the available context size")
+    report = _report_with_depths(
+        "multi-line", [DepthMetrics(depth_requested=32768, skipped=reason)],
+    )
+    row = LeaderboardRow(rank=1, report=report, point=report.depth_results[0])
+
+    cell = _decode_cell(row)
+    assert "\n" not in cell
+    assert len(cell) <= len("skipped: ") + 72
+    assert cell.startswith("skipped: Client error '400 Bad Request'")
 
 
 def test_leaderboard_table_has_depth_prefill_decode_columns():

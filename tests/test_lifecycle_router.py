@@ -395,3 +395,108 @@ def test_wait_default_timeout_not_tripped_just_before_300(httpx_mock):
         "qwen35-4b", now=_FakeClock([1000.0, 1299.0, 1299.0]), sleep=slept.append,
     )
     assert slept == [1.0]
+
+
+# =====================================================================
+# T13: wait_for_capacity() -- MLC-15, the slot the router frees late
+# =====================================================================
+def _capacity_props(httpx_mock, max_instances):
+    httpx_mock.add_response(
+        url=f"{HOST}/props",
+        json={"role": "router", "max_instances": max_instances,
+              "models_autoload": False, "build_info": "b10878-4850c7727"},
+    )
+
+
+def _loaded_response(httpx_mock, *counts):
+    """One /v1/models answer per count, each with that many loaded models."""
+    for n in counts:
+        httpx_mock.add_response(
+            url=f"{HOST}/v1/models",
+            json={"data": [_entry(f"m{i}", "loaded", 99) for i in range(n)]},
+        )
+
+
+def test_capacity_returns_immediately_when_a_slot_is_free(httpx_mock):
+    _capacity_props(httpx_mock, 3)
+    _loaded_response(httpx_mock, 2)
+    slept = []
+    _client().wait_for_capacity(now=_FakeClock([0.0]), sleep=slept.append)
+    assert slept == []
+
+
+def test_capacity_polls_until_the_router_releases_the_slot(httpx_mock):
+    _capacity_props(httpx_mock, 3)
+    _loaded_response(httpx_mock, 3, 3, 0)
+    slept = []
+    _client().wait_for_capacity(
+        timeout=60.0, now=_FakeClock([0.0]), sleep=slept.append, poll_interval=1.0
+    )
+    assert slept == [1.0, 1.0]
+
+
+def test_capacity_times_out_naming_the_usage(httpx_mock):
+    _capacity_props(httpx_mock, 3)
+    _loaded_response(httpx_mock, 3)
+    with pytest.raises(ProviderError) as exc:
+        _client().wait_for_capacity(
+            timeout=30.0, now=_FakeClock([0.0, 99.0]), sleep=lambda s: None
+        )
+    assert "3 of 3 in use" in str(exc.value)
+
+
+def test_capacity_is_a_noop_when_props_reports_no_limit(httpx_mock):
+    _capacity_props(httpx_mock, 0)
+    slept = []
+    _client().wait_for_capacity(now=_FakeClock([0.0]), sleep=slept.append)
+    assert slept == []
+    # /props answered the question; /v1/models was never needed
+    assert [r.url.path for r in httpx_mock.get_requests()] == ["/props"]
+
+
+def test_capacity_is_a_noop_when_props_is_unreachable(httpx_mock):
+    httpx_mock.add_exception(httpx.ConnectError("down"), url=f"{HOST}/props")
+    _client().wait_for_capacity(now=_FakeClock([0.0]), sleep=lambda s: None)
+
+
+# =====================================================================
+# T14: wait_until_unloaded() -- "model is already running" on reload
+# =====================================================================
+def _mixed_response(httpx_mock, *rounds):
+    """One /v1/models answer per round; each round is a list of (id, status)."""
+    for entries in rounds:
+        httpx_mock.add_response(
+            url=f"{HOST}/v1/models",
+            json={"data": [_entry(i, v, 99) for i, v in entries]},
+        )
+
+
+def test_unloaded_returns_immediately_when_already_gone(httpx_mock):
+    _mixed_response(httpx_mock, [("a", "unloaded")])
+    slept = []
+    _client().wait_until_unloaded(["a"], now=_FakeClock([0.0]), sleep=slept.append)
+    assert slept == []
+
+
+def test_unloaded_polls_while_the_instance_is_still_running(httpx_mock):
+    _mixed_response(httpx_mock, [("a", "loaded")], [("a", "unloaded")])
+    slept = []
+    _client().wait_until_unloaded(
+        ["a"], now=_FakeClock([0.0]), sleep=slept.append, poll_interval=1.0
+    )
+    assert slept == [1.0]
+
+
+def test_unloaded_times_out_naming_the_stragglers(httpx_mock):
+    _mixed_response(httpx_mock, [("a", "loaded"), ("b", "unloaded")])
+    with pytest.raises(ProviderError) as exc:
+        _client().wait_until_unloaded(
+            ["a", "b"], timeout=30.0, now=_FakeClock([0.0, 99.0]), sleep=lambda s: None
+        )
+    msg = str(exc.value)
+    assert "a" in msg and "b to unload" not in msg
+
+
+def test_unloaded_makes_no_request_for_an_empty_list(httpx_mock):
+    _client().wait_until_unloaded([], now=_FakeClock([0.0]), sleep=lambda s: None)
+    assert httpx_mock.get_requests() == []

@@ -23,6 +23,7 @@ _PROPS_TIMEOUT = 10.0
 _LIST_TIMEOUT = 10.0
 _MUTATION_TIMEOUT = 60.0
 _LOAD_TIMEOUT = 300.0   # TD-06: aligned with RunConfig.timeout
+_CAPACITY_TIMEOUT = 60.0
 _POLL_INTERVAL = 1.0
 
 
@@ -174,6 +175,77 @@ class LlamaRouterClient:
                 raise ProviderError(
                     f"Timed out after {timeout:.0f}s waiting for {model!r} "
                     f"to load on router at {self.host}"
+                )
+            sleep(poll_interval)
+
+
+    def wait_until_unloaded(
+        self,
+        models: List[str],
+        timeout: float = _CAPACITY_TIMEOUT,
+        *,
+        now=time.monotonic,
+        sleep=time.sleep,
+        poll_interval: float = _POLL_INTERVAL,
+    ) -> None:
+        """Poll ``GET /v1/models`` until none of ``models`` is still ``loaded``.
+
+        ``POST /models/unload`` is accepted before the instance has actually
+        stopped, so reloading the *same* model straight after unloading it is
+        refused with "model is already running". Waiting for a free slot is not
+        enough to catch that: the slot is free (the count already dropped) while
+        that particular instance is still shutting down.
+        """
+        wanted = [m for m in (models or []) if m]
+        if not wanted:
+            return
+        deadline = now() + timeout
+        while True:
+            status = {m.id: m.status for m in self.list_models()}
+            still = [m for m in wanted if status.get(m) == "loaded"]
+            if not still:
+                return
+            if now() >= deadline:
+                raise ProviderError(
+                    f"Timed out after {timeout:.0f}s waiting for "
+                    f"{', '.join(still)} to unload on router at {self.host}"
+                )
+            sleep(poll_interval)
+
+    def wait_for_capacity(
+        self,
+        timeout: float = _CAPACITY_TIMEOUT,
+        *,
+        now=time.monotonic,
+        sleep=time.sleep,
+        poll_interval: float = _POLL_INTERVAL,
+    ) -> None:
+        """Poll ``GET /v1/models`` until fewer models are loaded than ``--models-max``.
+
+        ``POST /models/unload`` answers before the instance slot is actually
+        released, so a load issued right after an unload can still come back
+        "model limit reached, try again later". Callers that have just unloaded
+        wait here first rather than racing the router.
+
+        A no-op when ``GET /props`` does not report ``max_instances`` -- an
+        older build, or a props call that fails: there is no known capacity to
+        wait for, so the load is attempted and the router's own error stands.
+        """
+        try:
+            max_instances = self.props().max_instances or 0
+        except ProviderError:
+            return
+        if max_instances <= 0:
+            return
+        deadline = now() + timeout
+        while True:
+            in_use = len(self.loaded_models())
+            if in_use < max_instances:
+                return
+            if now() >= deadline:
+                raise ProviderError(
+                    f"Timed out after {timeout:.0f}s waiting for a free model slot "
+                    f"on router at {self.host} ({in_use} of {max_instances} in use)"
                 )
             sleep(poll_interval)
 

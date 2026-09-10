@@ -226,6 +226,32 @@ class Runner:
         return report
 
     # ------------------------------------------------------------------
+    def _context_budget(self, model: str):
+        """Per-request context of ``model``'s backend, or ``None`` if unknown.
+
+        The server's own answer wins: it is the only one that accounts for
+        both the split across parallel slots and the cap at the model's
+        trained context. The resolved launch argv is the fallback for
+        backends that cannot report it -- an upper bound, but still enough to
+        catch the case the argv makes obvious.
+
+        Nothing is inferred when neither knows: an unknown budget must leave
+        the sweep exactly as it was.
+        """
+        from .lifecycle.params import ContextBudget, usable_context
+
+        try:
+            served = self.provider.context_window(model)
+        except Exception:
+            served = None
+        if served:
+            return ContextBudget(limit=served, source="served by the backend")
+
+        args = self._prepared_params.get(model)
+        if args is None:
+            args = (self.config.load_params or {}).get(model)
+        return usable_context(args)
+
     def _measure_speed(self, model: str, observer: Observer = None,
                        report: Optional[ModelReport] = None):
         """Sweep the configured depths and return (speed, memory, points).
@@ -244,7 +270,8 @@ class Runner:
             _emit(observer, EV_PHASE, model=model, phase="speed", depth=depth)
 
         sweep = measure_at_depths(self.provider, model, cfg.depths or [0],
-                                  cfg=cfg, warn=_warn, on_depth=_on_depth)
+                                  cfg=cfg, warn=_warn, on_depth=_on_depth,
+                                  budget=self._context_budget(model))
 
         # Zero tokens in both content and either reasoning field is a failed
         # generation, not a slow one: say so instead of leaving a silent

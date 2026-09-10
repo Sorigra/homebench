@@ -271,3 +271,36 @@ def test_memory_is_empty_off_router(httpx_mock):
     httpx_mock.add_response(url=f"{PLAIN}/props", json={"role": "server"})
 
     assert LlamaCppProvider(host=PLAIN).memory("qwen35-4b").size_bytes == 0
+
+
+# =====================================================================
+# The served context window, not the one the argv asked for (PERF-14)
+# =====================================================================
+def test_context_window_reads_the_served_n_ctx(httpx_mock):
+    """/props answers with the loaded instance's own n_ctx.
+
+    That number is already divided by --parallel and already capped at the
+    model's trained context, which is exactly what the argv cannot say.
+    """
+    httpx_mock.add_response(
+        url="http://x:8080/props?model=gemma4-e2b",
+        json={"default_generation_settings": {"n_ctx": 4096}},
+    )
+    assert LlamaCppProvider(host="http://x:8080").context_window("gemma4-e2b") == 4096
+
+
+def test_context_window_is_none_when_the_route_is_missing(httpx_mock):
+    httpx_mock.add_response(url="http://x:8080/props?model=m", status_code=404)
+    assert LlamaCppProvider(host="http://x:8080").context_window("m") is None
+
+
+def test_context_window_is_none_on_a_malformed_answer(httpx_mock):
+    httpx_mock.add_response(url="http://x:8080/props?model=m",
+                            json={"default_generation_settings": {"n_ctx": 0}})
+    assert LlamaCppProvider(host="http://x:8080").context_window("m") is None
+
+
+def test_context_window_is_none_when_props_says_nothing_about_ctx(httpx_mock):
+    httpx_mock.add_response(url="http://x:8080/props?model=m",
+                            json={"role": "router", "max_instances": 3})
+    assert LlamaCppProvider(host="http://x:8080").context_window("m") is None
