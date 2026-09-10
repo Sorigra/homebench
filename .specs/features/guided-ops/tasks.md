@@ -108,10 +108,10 @@ T15 -> T16
 **Tools**: MCP: NONE · Skill: tlc-spec-driven
 
 **Done when**:
-- [ ] `save()` grava os três campos e **não** grava chave nem campo `api_key`
-- [ ] `load()` de arquivo ausente ou JSON inválido devolve config usável, sem exceção
-- [ ] Testes em `tests/test_config.py`
-- [ ] Gate: `.venv/bin/python -m pytest -q` exit 0
+- [x] `save()` grava os três campos e **não** grava chave nem campo `api_key`
+- [x] `load()` de arquivo ausente ou JSON inválido devolve config usável, sem exceção
+- [x] Testes em `tests/test_config.py`
+- [x] Gate: `.venv/bin/python -m pytest -q` exit 0
 
 **Tests**: unit
 **Gate**: quick
