@@ -336,12 +336,12 @@ T15 -> T16
 **Tools**: MCP: NONE · Skill: tlc-spec-driven
 
 **Done when**:
-- [ ] Faixa mostra host e `down` quando o snapshot está down; App não crasha
-- [ ] Secret `sk-secret` não aparece no texto renderizado
-- [ ] `q` encerra com `None`
-- [ ] Testes `run_test` em `tests/test_tui_panel.py`
-- [ ] `config.py`/`plan.py`/`ops.py` não importam `tui` (teste de import)
-- [ ] Gate: `.venv/bin/python -m pytest -q` exit 0
+- [x] Faixa mostra host e `down` quando o snapshot está down; App não crasha
+- [x] Secret `sk-secret` não aparece no texto renderizado
+- [x] `q` encerra com `None`
+- [x] Testes `run_test` em `tests/test_tui_panel.py`
+- [x] `config.py`/`plan.py`/`ops.py` não importam `tui` (teste de import)
+- [x] Gate: `.venv/bin/python -m pytest -q` exit 0
 
 **Tests**: unit
 **Gate**: quick

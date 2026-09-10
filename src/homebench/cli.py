@@ -620,6 +620,10 @@ def cmd_panel(
             "[red]error:[/red] o painel precisa de um terminal interativo."
         )
         return 1
+    from .tui.panel import run_panel
+
+    if run_panel() is None:
+        return 0
     return 0
 
 
