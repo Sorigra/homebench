@@ -223,11 +223,11 @@ T15 -> T16
 **Tools**: MCP: NONE · Skill: tlc-spec-driven
 
 **Done when**:
-- [ ] Restore com dois ids disponíveis devolve os dois
-- [ ] Id ausente do catálogo é descartado
-- [ ] Depth fora de `DEPTH_CHOICES` é descartado
-- [ ] Round-trip via `config.json`
-- [ ] Gate: `.venv/bin/python -m pytest -q` exit 0
+- [x] Restore com dois ids disponíveis devolve os dois
+- [x] Id ausente do catálogo é descartado
+- [x] Depth fora de `DEPTH_CHOICES` é descartado
+- [x] Round-trip via `config.json`
+- [x] Gate: `.venv/bin/python -m pytest -q` exit 0
 
 **Tests**: unit
 **Gate**: quick
