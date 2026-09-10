@@ -153,11 +153,11 @@ T15 -> T16
 **Tools**: MCP: NONE · Skill: tlc-spec-driven
 
 **Done when**:
-- [ ] `--defaults` usa host `http://127.0.0.1:8080`, `~/llm-server/llama/api-key.txt`, `/home/eskudo/ai-models`
-- [ ] Fonte do script não contém `docker`, `sudo` nem `systemctl`
-- [ ] `HOMEBENCH_SETUP_SKIP_PIP=1` ainda grava `config.json` (pytest rápido); sem a flag, chama `pip install -e .`
-- [ ] Testes em `tests/test_setup.py` com `HOME`/`HOMEBENCH_HOME` isolados
-- [ ] Gate: `.venv/bin/python -m pytest -q` exit 0
+- [x] `--defaults` usa host `http://127.0.0.1:8080`, `~/llm-server/llama/api-key.txt`, `/home/eskudo/ai-models`
+- [x] Fonte do script não contém `docker`, `sudo` nem `systemctl`
+- [x] `HOMEBENCH_SETUP_SKIP_PIP=1` ainda grava `config.json` (pytest rápido); sem a flag, chama `pip install -e .`
+- [x] Testes em `tests/test_setup.py` com `HOME`/`HOMEBENCH_HOME` isolados
+- [x] Gate: `.venv/bin/python -m pytest -q` exit 0
 
 **Tests**: unit
 **Gate**: quick
