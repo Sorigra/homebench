@@ -488,3 +488,82 @@ def test_run_panel_returns_none_on_quit():
         assert run_panel(status=status2) is None
     finally:
         PanelApp.run = original
+
+
+def _view_hidden(app: PanelApp, name: str) -> bool:
+    return app.query_one(f"#{name}-view").has_class("hidden")
+
+
+def test_menu_enter_opens_plan():
+    status = RouterStatus(host=HOST, reachable=False)
+
+    async def scenario():
+        app = PanelApp(status=status, model_ids=["alpha"])
+        async with app.run_test() as pilot:
+            await pilot.press("enter")
+            await pilot.pause(0.05)
+            assert _view_hidden(app, "menu")
+            assert not _view_hidden(app, "plan")
+
+    asyncio.run(scenario())
+
+
+def test_menu_down_enter_opens_doctor(monkeypatch):
+    monkeypatch.setattr(
+        "homebench.tui.panel.doctor_snapshot",
+        lambda: [Check("router", "ok", "fine")],
+    )
+    status = RouterStatus(host=HOST, reachable=False)
+
+    async def scenario():
+        app = PanelApp(status=status, model_ids=[])
+        async with app.run_test() as pilot:
+            await pilot.press("down")
+            await pilot.press("enter")
+            await pilot.pause(0.05)
+            assert _view_hidden(app, "menu")
+            assert not _view_hidden(app, "doctor")
+            text = str(app.query_one("#doctor-body", Static).render())
+            assert "ok: router" in text
+
+    asyncio.run(scenario())
+
+
+def test_escape_from_plan_returns_to_menu():
+    status = RouterStatus(host=HOST, reachable=False)
+
+    async def scenario():
+        app = PanelApp(status=status, model_ids=["alpha"])
+        async with app.run_test() as pilot:
+            await _open_plan(app, pilot)
+            await pilot.press("escape")
+            await pilot.pause(0.05)
+            assert not _view_hidden(app, "menu")
+            assert _view_hidden(app, "plan")
+            assert app.result is None
+
+    asyncio.run(scenario())
+
+
+def test_escape_on_menu_quits_panel():
+    status = RouterStatus(host=HOST, reachable=False)
+
+    async def scenario():
+        app = PanelApp(status=status, model_ids=[])
+        async with app.run_test() as pilot:
+            await pilot.press("escape")
+        assert app.result is None
+
+    asyncio.run(scenario())
+
+
+def test_menu_enter_on_quit_exits():
+    status = RouterStatus(host=HOST, reachable=False)
+
+    async def scenario():
+        app = PanelApp(status=status, model_ids=[])
+        async with app.run_test() as pilot:
+            await pilot.press("down", "down", "down", "enter")
+        assert app.result is None
+
+    asyncio.run(scenario())

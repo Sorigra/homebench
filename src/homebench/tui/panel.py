@@ -7,7 +7,8 @@ from typing import Callable, List, Optional
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Checkbox, Footer, Label, RadioButton, RadioSet, Static
+from textual.widgets import Button, Checkbox, Footer, Label, OptionList, RadioButton, RadioSet, Static
+from textual.widgets.option_list import Option
 
 from ..config import load, save
 from ..ops import RouterStatus, doctor_snapshot, history_snapshot, router_status
@@ -127,6 +128,7 @@ class PanelApp(App):
         ("d", "show_doctor", "Doctor"),
         ("h", "show_history", "Histórico"),
         ("m", "show_menu", "Menu"),
+        ("escape", "back", "Voltar"),
     ]
 
     def __init__(
@@ -144,6 +146,7 @@ class PanelApp(App):
         self._confirmer = confirmer
         self._result: Optional[RunPlan] = None
         self._current_plan = RunPlan(model_ids=[], depths=[])
+        self._view = "menu"
 
     @property
     def result(self) -> Optional[RunPlan]:
@@ -152,12 +155,15 @@ class PanelApp(App):
     def compose(self) -> ComposeResult:
         yield Static(id="status-strip")
         with Vertical(id="menu-view"):
-            yield Static(
-                "Menu principal\n\n"
-                "[p] Planejar   [d] Doctor   [h] Histórico\n"
-                "[q] Sair",
-                id="menu-body",
+            yield Label("Menu principal")
+            yield OptionList(
+                Option("Planejar", id="menu-plan"),
+                Option("Doctor", id="menu-doctor"),
+                Option("Histórico", id="menu-history"),
+                Option("Sair", id="menu-quit"),
+                id="menu-list",
             )
+            yield Static("↑↓ mover   Enter abrir   Esc sair", id="menu-hint")
         with Vertical(id="plan-view", classes="hidden"):
             yield Label("Planejar", id="plan-title")
             yield Vertical(id="model-list")
@@ -191,6 +197,7 @@ class PanelApp(App):
             self._model_ids = discover_model_ids(self._status)
         self._build_model_checkboxes()
         self._restore_last_plan()
+        self._show_view("menu")
 
     def _build_model_checkboxes(self) -> None:
         container = self.query_one("#model-list")
@@ -253,6 +260,7 @@ class PanelApp(App):
         )
 
     def _show_view(self, name: str) -> None:
+        self._view = name
         views = {
             "menu": self.query_one("#menu-view"),
             "plan": self.query_one("#plan-view"),
@@ -264,6 +272,14 @@ class PanelApp(App):
                 widget.remove_class("hidden")
             else:
                 widget.add_class("hidden")
+        if name == "menu":
+            self.query_one("#menu-list", OptionList).focus()
+        elif name == "plan":
+            checkboxes = list(self.query("#model-list Checkbox"))
+            if checkboxes:
+                checkboxes[0].focus()
+            else:
+                self.query_one("#run-btn").focus()
 
     def action_show_menu(self) -> None:
         self._show_view("menu")
@@ -292,6 +308,24 @@ class PanelApp(App):
 
     def action_quit_panel(self) -> None:
         self.exit(None)
+
+    def action_back(self) -> None:
+        if self._view == "menu":
+            self.action_quit_panel()
+        else:
+            self.action_show_menu()
+
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        if event.option_list.id != "menu-list":
+            return
+        selected = {
+            "menu-plan": self.action_show_plan,
+            "menu-doctor": self.action_show_doctor,
+            "menu-history": self.action_show_history,
+            "menu-quit": self.action_quit_panel,
+        }.get(event.option_id or "")
+        if selected is not None:
+            selected()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "run-btn":

@@ -53,6 +53,7 @@ Toda ambiguidade resolvida ou registrada aqui.
 | Lançador | Wrapper em `~/.local/bin/homebench` apontando ao `.venv` do repo | “chamar o executável” depois de instalado | y |
 | AD-001 / AD-002 / AD-005 / AD-007 | Continuam valendo | Já são decisão de projeto | y |
 | Ids de modelo com `.` (ex. `qwen3.8-27b-unsloth`) | Rótulo e `RunPlan` usam o id original; o `id` do widget Textual é o índice no catálogo | Textual só aceita letra/número/`_`/`-` em `id`; o catálogo local já usa ponto | y |
+| Navegação do menu BIOS | Setas sobem/descem o destaque; Enter abre o item; Esc volta (no menu, sai) | Pedido do operador após o MVP só com letras | y |
 
 **Open questions:** none — todas resolvidas ou registradas na tabela acima.
 
@@ -114,8 +115,12 @@ não precisar lembrar subcomandos.
 3. WHEN `homebench` é invocado com qualquer argumento THEN o sistema SHALL manter o roteamento CLI atual (`run`, `doctor`, `history`, `throughput`, flags).
 4. WHEN o subcomando `panel` é invocado THEN o sistema SHALL abrir o painel.
 5. IF o subcomando `panel` for invocado sem TTY THEN o sistema SHALL sair com código diferente de 0 e uma mensagem dizendo que o painel precisa de terminal.
+6. WHEN o painel mostra o menu principal THEN o sistema SHALL mover o destaque entre Planejar, Doctor, Histórico e Sair com as setas para cima e para baixo.
+7. WHEN o operador pressiona Enter no item destacado THEN o sistema SHALL abrir essa tela, ou sair do painel se o item for Sair.
+8. WHEN o operador pressiona Esc em Planejar, Doctor ou Histórico THEN o sistema SHALL voltar ao menu principal sem iniciar um run.
+9. WHEN o operador pressiona Esc no menu principal THEN o sistema SHALL sair do painel com resultado vazio.
 
-**Independent Test**: `_inject_default_command([])` num pytest (não-TTY) continua `["run"]`; com stdin/stdout TTY vira `["panel"]`; `homebench doctor` não abre o painel.
+**Independent Test**: `_inject_default_command([])` num pytest (não-TTY) continua `["run"]`; com stdin/stdout TTY vira `["panel"]`; `homebench doctor` não abre o painel. Enter no menu abre Planejar; seta para baixo e Enter abre Doctor; Esc em Planejar volta ao menu; Esc no menu sai.
 
 ---
 
@@ -250,12 +255,16 @@ fluxo certo sem ler 10 seções de flags.
 | GOPS-21 | P2: Caminho feliz no docs/USO.md | Tasks | In Tasks |
 | GOPS-22 | P1: Planejar modelos, profundidade e tipo | Execute | Verified |
 | GOPS-23 | P1: Planejar modelos, profundidade e tipo | Execute | Verified |
+| GOPS-24 | P1: Abrir o painel no executável | Execute | Implementing |
+| GOPS-25 | P1: Abrir o painel no executável | Execute | Implementing |
+| GOPS-26 | P1: Abrir o painel no executável | Execute | Implementing |
+| GOPS-27 | P1: Abrir o painel no executável | Execute | Implementing |
 
 **ID format:** `GOPS-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 23 total, 21 mapped to tasks, 2 verified inline (GOPS-22/GOPS-23)
+**Coverage:** 27 total, 21 mapped to tasks, 6 verified or implementing inline (GOPS-22–GOPS-27)
 
 ---
 
