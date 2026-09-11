@@ -52,6 +52,7 @@ Toda ambiguidade resolvida ou registrada aqui.
 | Router down no setup | Instala mesmo assim; checagem fica `fail` | Operador: não desfazer; não subir Docker | y |
 | Lançador | Wrapper em `~/.local/bin/homebench` apontando ao `.venv` do repo | “chamar o executável” depois de instalado | y |
 | AD-001 / AD-002 / AD-005 / AD-007 | Continuam valendo | Já são decisão de projeto | y |
+| Ids de modelo com `.` (ex. `qwen3.8-27b-unsloth`) | Rótulo e `RunPlan` usam o id original; o `id` do widget Textual é o índice no catálogo | Textual só aceita letra/número/`_`/`-` em `id`; o catálogo local já usa ponto | y |
 
 **Open questions:** none — todas resolvidas ou registradas na tabela acima.
 
@@ -151,8 +152,10 @@ teste é velocidade, qualidade ou os dois, para não montar `-m` e `--depths` na
 5. IF o operador dispara Rodar com nenhuma profundidade marcada THEN o sistema SHALL recusar, permanecer no painel, e mostrar que é preciso ao menos uma profundidade.
 6. WHEN um plano válido é deixado em Planejar THEN o sistema SHALL gravar `last_plan` em `config.json`.
 7. WHEN o painel abre e `last_plan` existe THEN o sistema SHALL restaurar as marcações cujo id ainda existe na lista atual e SHALL descartar ids que desapareceram.
+8. IF um id de modelo contiver caracteres que o Textual rejeita como `id` de widget (por exemplo `.`) THEN o sistema SHALL montar o painel sem abortar e SHALL mostrar o id original no rótulo do checkbox.
+9. WHEN o operador marca um modelo cujo id contém `.` THEN o `RunPlan` e o `last_plan` SHALL gravar o id original do router, não o identificador interno do widget.
 
-**Independent Test**: marcar dois modelos e só a profundidade `0`, sair e reabrir o plano headless a partir do JSON: os dois ids e `[0]` voltam; um id removido do catálogo some da restauração.
+**Independent Test**: marcar dois modelos e só a profundidade `0`, sair e reabrir o plano headless a partir do JSON: os dois ids e `[0]` voltam; um id removido do catálogo some da restauração. Montar o painel com `qwen3.8-27b-unsloth` não levanta `BadIdentifier`; marcar esse id grava o mesmo string no plano.
 
 ---
 
@@ -216,6 +219,7 @@ fluxo certo sem ler 10 seções de flags.
 - IF `setup.sh` for invocado de outro diretório THEN o sistema SHALL operar no diretório do próprio script (raiz do repo), não no cwd do operador.
 - IF o catálogo de modelos estiver vazio THEN Planejar SHALL mostrar lista vazia e Rodar permanecer recusado por GOPS-13.
 - WHEN dois ou mais modelos estão marcados THEN o plano SHALL conservar todos, não só o primeiro (lista, não item único).
+- IF dois ids diferem só por um caractere inválido para widget (`qwen3.8` vs `qwen3_8`) THEN o sistema SHALL tratar os dois como modelos distintos no plano.
 
 ---
 
@@ -244,12 +248,14 @@ fluxo certo sem ler 10 seções de flags.
 | GOPS-19 | P1: Doctor e Histórico no mesmo programa | Tasks | In Tasks |
 | GOPS-20 | P1: Doctor e Histórico no mesmo programa | Tasks | In Tasks |
 | GOPS-21 | P2: Caminho feliz no docs/USO.md | Tasks | In Tasks |
+| GOPS-22 | P1: Planejar modelos, profundidade e tipo | Execute | Implementing |
+| GOPS-23 | P1: Planejar modelos, profundidade e tipo | Execute | Implementing |
 
 **ID format:** `GOPS-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 21 total, 21 mapped to tasks, 0 unmapped
+**Coverage:** 23 total, 21 mapped to tasks, 2 unmapped (hotfix GOPS-22/GOPS-23, execute inline)
 
 ---
 

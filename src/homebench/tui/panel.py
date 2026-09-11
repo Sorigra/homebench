@@ -17,6 +17,17 @@ _MSG_NEED_MODEL = "Selecione ao menos um modelo."
 _MSG_NEED_DEPTH = "Selecione ao menos uma profundidade."
 
 
+def model_checkbox_id(index: int) -> str:
+    """Textual widget id for the catalog checkbox at ``index``.
+
+    Router model ids may contain ``.`` (for example ``qwen3.8-27b-unsloth``).
+    Those characters are illegal in Textual identifiers, so the widget id is
+    always the catalog index. The checkbox label and ``RunPlan.model_ids``
+    keep the original router id.
+    """
+    return f"model-{index}"
+
+
 def format_status_strip(status: RouterStatus) -> str:
     """Render the always-visible router status line (never includes API keys)."""
     if status.reachable:
@@ -184,8 +195,12 @@ class PanelApp(App):
     def _build_model_checkboxes(self) -> None:
         container = self.query_one("#model-list")
         container.remove_children()
-        for model_id in self._model_ids or []:
-            container.mount(Checkbox(model_id, id=f"model-{model_id}"))
+        for index, model_id in enumerate(self._model_ids or []):
+            container.mount(Checkbox(model_id, id=model_checkbox_id(index)))
+
+    def _model_checkbox(self, model_id: str) -> Checkbox:
+        index = (self._model_ids or []).index(model_id)
+        return self.query_one(f"#{model_checkbox_id(index)}", Checkbox)
 
     def _restore_last_plan(self) -> None:
         cfg = load(self._home)
@@ -197,8 +212,7 @@ class PanelApp(App):
     def _apply_plan_to_ui(self, plan: RunPlan) -> None:
         self._current_plan = plan
         for model_id in self._model_ids or []:
-            cb = self.query_one(f"#model-{model_id}", Checkbox)
-            cb.value = model_id in plan.model_ids
+            self._model_checkbox(model_id).value = model_id in plan.model_ids
         for depth in DEPTH_CHOICES:
             self.query_one(f"#depth-{depth}", Checkbox).value = depth in plan.depths
         radio = self.query_one("#test-type", RadioSet)
@@ -212,7 +226,7 @@ class PanelApp(App):
     def _read_plan_from_ui(self) -> RunPlan:
         model_ids = [
             mid for mid in (self._model_ids or [])
-            if self.query_one(f"#model-{mid}", Checkbox).value
+            if self._model_checkbox(mid).value
         ]
         depths = [d for d in DEPTH_CHOICES if self.query_one(f"#depth-{d}", Checkbox).value]
         test_type = self.query_one("#test-type", RadioSet).pressed_button

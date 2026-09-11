@@ -9,7 +9,12 @@ from homebench.config import HomebenchConfig, load, save
 from homebench.doctor import Check
 from homebench.history import RunRecord
 from homebench.ops import RouterStatus
-from homebench.tui.panel import PanelApp, format_status_strip, run_panel
+from homebench.tui.panel import (
+    PanelApp,
+    format_status_strip,
+    model_checkbox_id,
+    run_panel,
+)
 
 HOST = "http://router.test"
 SECRET = "sk-secret"
@@ -86,6 +91,11 @@ async def _open_plan(app: PanelApp, pilot):
     await pilot.pause(0.05)
 
 
+async def _click_model(pilot, app: PanelApp, model_id: str) -> None:
+    index = list(app._model_ids or []).index(model_id)
+    await pilot.click(f"#{model_checkbox_id(index)}")
+
+
 def test_plan_screen_two_models_in_plan(monkeypatch, tmp_path):
     home = str(tmp_path / "home")
     monkeypatch.setenv("HOMEBENCH_HOME", home)
@@ -96,8 +106,8 @@ def test_plan_screen_two_models_in_plan(monkeypatch, tmp_path):
         app = PanelApp(status=status, model_ids=model_ids, home=home)
         async with app.run_test() as pilot:
             await _open_plan(app, pilot)
-            await pilot.click(f"#model-alpha")
-            await pilot.click(f"#model-beta")
+            await _click_model(pilot, app, "alpha")
+            await _click_model(pilot, app, "beta")
             await pilot.click("#depth-0")
             plan = app._read_plan_from_ui()
             assert plan.model_ids == ["alpha", "beta"]
@@ -154,7 +164,7 @@ def test_plan_run_with_zero_depths_shows_message(monkeypatch, tmp_path):
         app = PanelApp(status=status, model_ids=model_ids, home=home)
         async with app.run_test() as pilot:
             await _open_plan(app, pilot)
-            await pilot.click("#model-alpha")
+            await _click_model(pilot, app, "alpha")
             await pilot.click("#run-btn")
             await pilot.pause(0.05)
             msg = app.query_one("#plan-message", Static)
@@ -202,8 +212,8 @@ def test_valid_plan_saved_on_run(monkeypatch, tmp_path):
         app = PanelApp(status=status, model_ids=model_ids, home=home)
         async with app.run_test() as pilot:
             await _open_plan(app, pilot)
-            await pilot.click("#model-alpha")
-            await pilot.click("#model-beta")
+            await _click_model(pilot, app, "alpha")
+            await _click_model(pilot, app, "beta")
             await pilot.click("#depth-0")
             await pilot.click("#run-btn")
             await pilot.pause(0.05)
@@ -213,6 +223,65 @@ def test_valid_plan_saved_on_run(monkeypatch, tmp_path):
     assert cfg.last_plan is not None
     assert cfg.last_plan["model_ids"] == ["alpha", "beta"]
     assert cfg.last_plan["depths"] == [0]
+
+
+def test_plan_accepts_model_ids_with_dots(monkeypatch, tmp_path):
+    home = str(tmp_path / "home")
+    monkeypatch.setenv("HOMEBENCH_HOME", home)
+    status = RouterStatus(host=HOST, reachable=True)
+    dotted = "qwen3.8-27b-unsloth"
+    underscore = "qwen3_8-27b-unsloth"
+    model_ids = [dotted, underscore]
+
+    async def scenario():
+        app = PanelApp(status=status, model_ids=model_ids, home=home)
+        async with app.run_test() as pilot:
+            await _open_plan(app, pilot)
+            labels = [str(cb.label) for cb in app.query("#model-list Checkbox")]
+            assert labels == model_ids
+            await _click_model(pilot, app, dotted)
+            await _click_model(pilot, app, underscore)
+            await pilot.click("#depth-0")
+            plan = app._read_plan_from_ui()
+            assert plan.model_ids == [dotted, underscore]
+            await pilot.click("#run-btn")
+            await pilot.pause(0.05)
+            assert app.result is not None
+            assert app.result.model_ids == [dotted, underscore]
+
+    asyncio.run(scenario())
+    cfg = load(home=home)
+    assert cfg.last_plan is not None
+    assert cfg.last_plan["model_ids"] == [dotted, underscore]
+
+
+def test_last_plan_restores_model_ids_with_dots(monkeypatch, tmp_path):
+    home = str(tmp_path / "home")
+    monkeypatch.setenv("HOMEBENCH_HOME", home)
+    dotted = "qwen3.8-27b-unsloth"
+    save(
+        HomebenchConfig(
+            host=HOST,
+            last_plan={
+                "model_ids": [dotted],
+                "depths": [0],
+                "run_speed": True,
+                "run_quality": False,
+            },
+        ),
+        home=home,
+    )
+    status = RouterStatus(host=HOST, reachable=True)
+
+    async def scenario():
+        app = PanelApp(status=status, model_ids=[dotted, "alpha"], home=home)
+        async with app.run_test() as pilot:
+            await _open_plan(app, pilot)
+            plan = app._read_plan_from_ui()
+            assert plan.model_ids == [dotted]
+            assert plan.depths == [0]
+
+    asyncio.run(scenario())
 
 
 def test_doctor_screen_shows_ok_and_fail_checks(monkeypatch):
@@ -308,7 +377,7 @@ def test_doctor_and_history_screens_do_not_call_router(monkeypatch):
 async def _run_valid_plan(app, pilot, model_ids=("alpha",)):
     await _open_plan(app, pilot)
     for mid in model_ids:
-        await pilot.click(f"#model-{mid}")
+        await _click_model(pilot, app, mid)
     await pilot.click("#depth-0")
     await pilot.click("#run-btn")
     await pilot.pause(0.2)
