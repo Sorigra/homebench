@@ -189,20 +189,13 @@ voltar a injetar `run` no TTY vazio.
 ## Handoff
 
 - **Feature**: guided-ops (`.specs/features/guided-ops/`)
-- **Phase / Task**: Specify + Design + Tasks escritos. Execute **não** começou.
-- **Completed**: context.md travado; spec.md (`validate_spec.py` 0/0); design.md; tasks.md T1–T16 (`validate_tasks.py` 0 erros, 1 warn T16 docs=`none`); AD-008 e AD-009 apensados.
+- **Phase / Task**: Execute completo. Hotfix GOPS-22/GOPS-23 (ids com `.`) verificado.
+- **Completed**: T1–T16; hotfix `4ca26fc`; Verifier PASS (`.specs/features/guided-ops/validation.md`).
 - **In-progress**: none
-- **Next step**: Operador confirma spec + design + tasks. Depois **abre sessão Cursor nova**, resume estes artefatos, implementa com workers **Composer 2.5** (~7 tasks/batch, fases inteiras). Não implementar nesta conversa.
-- **Blockers**: confirmação do operador; contexto desta sessão grande
-- **Uncommitted files**: `.specs/features/guided-ops/{context,spec,design,tasks}.md`, `.specs/STATE.md` (AD-008/009 + este Handoff). Sem código de feature.
-- **Branch**: a que estiver em `git status` (não criar branch até Execute)
-
-**Execute (sessão nova):**
-1. Ler `.specs/STATE.md` Decisions + este Handoff; reconciliar com `git status`.
-2. Ler `spec.md`, `context.md`, `design.md`, `tasks.md`.
-3. Ativar skill `tlc-spec-driven`. Pack: Phase 1–3 (T1–T8), depois 4–6 (T9–T16).
-4. Modelo dos workers: Composer 2.5. Verifier no fechamento (autor ≠ verificador).
-5. Um commit atômico por task. Sem `git push` sem autorização.
+- **Next step**: Operador roda `homebench` de novo. Catálogo com `qwen3.8-27b-unsloth` deve abrir o painel. Sem `git push` sem autorização.
+- **Blockers**: none
+- **Uncommitted files**: `setup.sh` mode `100755` (chmod do `./setup.sh` do operador; não faz parte do hotfix)
+- **Branch**: `feat/guided-ops`
 
 **Proibições permanentes:** sem Docker/sudo/container (AD-001); sem logar/commitar a API key; sem `git push` sem autorização na hora.
 

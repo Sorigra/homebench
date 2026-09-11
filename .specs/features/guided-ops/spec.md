@@ -248,14 +248,14 @@ fluxo certo sem ler 10 seções de flags.
 | GOPS-19 | P1: Doctor e Histórico no mesmo programa | Tasks | In Tasks |
 | GOPS-20 | P1: Doctor e Histórico no mesmo programa | Tasks | In Tasks |
 | GOPS-21 | P2: Caminho feliz no docs/USO.md | Tasks | In Tasks |
-| GOPS-22 | P1: Planejar modelos, profundidade e tipo | Execute | Implementing |
-| GOPS-23 | P1: Planejar modelos, profundidade e tipo | Execute | Implementing |
+| GOPS-22 | P1: Planejar modelos, profundidade e tipo | Execute | Verified |
+| GOPS-23 | P1: Planejar modelos, profundidade e tipo | Execute | Verified |
 
 **ID format:** `GOPS-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 23 total, 21 mapped to tasks, 2 unmapped (hotfix GOPS-22/GOPS-23, execute inline)
+**Coverage:** 23 total, 21 mapped to tasks, 2 verified inline (GOPS-22/GOPS-23)
 
 ---
 
