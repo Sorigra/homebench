@@ -189,13 +189,15 @@ voltar a injetar `run` no TTY vazio.
 ## Handoff
 
 - **Feature**: guided-ops (`.specs/features/guided-ops/`)
-- **Phase / Task**: Execute completo. Hotfix GOPS-22/GOPS-23 (ids com `.`) verificado.
-- **Completed**: T1–T16; hotfix `4ca26fc`; Verifier PASS (`.specs/features/guided-ops/validation.md`).
+- **Phase / Task**: Execute completo. Hotfix teclado BIOS (GOPS-24–27) verificado.
+- **Completed**: T1–T16; dotted-id `4ca26fc`; menu setas/Enter/Esc `2b5ddfe`.
 - **In-progress**: none
-- **Next step**: Operador roda `homebench` de novo. Catálogo com `qwen3.8-27b-unsloth` deve abrir o painel. Sem `git push` sem autorização.
+- **Next step**: Operador testa `homebench`: setas no menu, Enter abre, Esc volta/sai. Sem `git push` sem autorização.
 - **Blockers**: none
-- **Uncommitted files**: `setup.sh` mode `100755` (chmod do `./setup.sh` do operador; não faz parte do hotfix)
-- **Branch**: `feat/guided-ops`
+- **Uncommitted files**: `setup.sh` mode `100755` (fora deste hotfix)
+- **Branch**: `feat/guided-ops` (1 commit local à frente de origin até o relatório de validação)
+
+**Proibições permanentes:** sem Docker/sudo/container (AD-001); sem logar/commitar a API key; sem `git push` sem autorização na hora.
 
 **Proibições permanentes:** sem Docker/sudo/container (AD-001); sem logar/commitar a API key; sem `git push` sem autorização na hora.
 

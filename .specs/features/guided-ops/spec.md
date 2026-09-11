@@ -255,16 +255,16 @@ fluxo certo sem ler 10 seções de flags.
 | GOPS-21 | P2: Caminho feliz no docs/USO.md | Tasks | In Tasks |
 | GOPS-22 | P1: Planejar modelos, profundidade e tipo | Execute | Verified |
 | GOPS-23 | P1: Planejar modelos, profundidade e tipo | Execute | Verified |
-| GOPS-24 | P1: Abrir o painel no executável | Execute | Implementing |
-| GOPS-25 | P1: Abrir o painel no executável | Execute | Implementing |
-| GOPS-26 | P1: Abrir o painel no executável | Execute | Implementing |
-| GOPS-27 | P1: Abrir o painel no executável | Execute | Implementing |
+| GOPS-24 | P1: Abrir o painel no executável | Execute | Verified |
+| GOPS-25 | P1: Abrir o painel no executável | Execute | Verified |
+| GOPS-26 | P1: Abrir o painel no executável | Execute | Verified |
+| GOPS-27 | P1: Abrir o painel no executável | Execute | Verified |
 
 **ID format:** `GOPS-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 27 total, 21 mapped to tasks, 6 verified or implementing inline (GOPS-22–GOPS-27)
+**Coverage:** 27 total, 21 mapped to tasks, 6 verified inline (GOPS-22–GOPS-27)
 
 ---
 
