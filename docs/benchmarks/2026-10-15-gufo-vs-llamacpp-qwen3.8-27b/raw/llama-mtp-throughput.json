@@ -1,0 +1,46 @@
+[
+  {
+    "model": "qwen3.8-27b-unsloth",
+    "provider": "llamacpp",
+    "peak_aggregate_tps": 22.104224474321615,
+    "points": [
+      {
+        "concurrency": 1,
+        "requests": 4,
+        "completed": 4,
+        "errors": 0,
+        "total_output_tokens": 1024,
+        "wall_s": 47.18055108000408,
+        "aggregate_tps": 21.703858402662632,
+        "mean_req_tps": 21.71953313007929,
+        "mean_latency_s": 11.794826188248408,
+        "p95_latency_s": 12.058084756979952
+      },
+      {
+        "concurrency": 2,
+        "requests": 6,
+        "completed": 6,
+        "errors": 0,
+        "total_output_tokens": 1536,
+        "wall_s": 70.01230021097581,
+        "aggregate_tps": 21.93900208065442,
+        "mean_req_tps": 12.640949118037717,
+        "mean_latency_s": 21.45569195949065,
+        "p95_latency_s": 24.09759669197956
+      },
+      {
+        "concurrency": 4,
+        "requests": 12,
+        "completed": 12,
+        "errors": 0,
+        "total_output_tokens": 3072,
+        "wall_s": 138.97795887698885,
+        "aggregate_tps": 22.104224474321615,
+        "mean_req_tps": 7.521876825831203,
+        "mean_latency_s": 40.585144019918516,
+        "p95_latency_s": 47.282049642992206
+      }
+    ],
+    "error": null
+  }
+]

@@ -1,0 +1,119 @@
+{
+  "provider": "openai",
+  "started_at": 1792110779.5050857,
+  "finished_at": 1792111175.5518515,
+  "config": {
+    "max_tokens": 256,
+    "speed_max_tokens": 256,
+    "temperature": 0.0,
+    "seed": 42,
+    "repeat": 3,
+    "depths": [
+      0,
+      8192,
+      32768
+    ],
+    "warmup": true,
+    "unload_between": true,
+    "sample_rss": true,
+    "include_open": false,
+    "judge_model": null,
+    "run_quality": false,
+    "run_speed": true,
+    "quick": true,
+    "load_params": {}
+  },
+  "environment": {
+    "homebench_version": "0.13.4",
+    "hardware": {
+      "os": "Linux",
+      "os_version": "7.0.0-38-generic",
+      "arch": "x86_64",
+      "cpu": "x86_64",
+      "cpu_cores": 32,
+      "ram_total_bytes": 130153127936,
+      "ram_available_bytes": 98619305984,
+      "is_apple_silicon": false,
+      "unified_memory": false,
+      "python_version": "3.14.4",
+      "gpu": {
+        "name": "",
+        "vram_bytes": 0,
+        "kind": ""
+      }
+    }
+  },
+  "reports": [
+    {
+      "model": {
+        "name": "qwen3.8-27b-gufo",
+        "provider": "openai",
+        "size_bytes": 0,
+        "parameter_size": "",
+        "quantization": "",
+        "family": "",
+        "digest": ""
+      },
+      "speed": {
+        "ttft_s": 0.5296753179864027,
+        "tokens_per_sec": 12.239922484360541,
+        "prompt_tokens": 73,
+        "output_tokens": 256,
+        "prompt_eval_s": 0.45471304999999995,
+        "eval_s": 20.926796833024127,
+        "load_s": 0.0,
+        "total_s": 21.398717856005533,
+        "content_tokens": 160,
+        "reasoning_tokens": 94,
+        "prefill_tps": 160.5408069990514,
+        "timings_source": "server"
+      },
+      "memory": {
+        "size_bytes": 0,
+        "vram_bytes": 0,
+        "rss_peak_bytes": 8368128
+      },
+      "quality_score": null,
+      "tasks_passed": 0,
+      "tasks_total": 0,
+      "task_results": [],
+      "depth_results": [
+        {
+          "depth_requested": 0,
+          "depth_actual": 73,
+          "prefill_tps": 160.5408069990514,
+          "decode_tps": 12.239922484360541,
+          "ttft_s": 0.5296753179864027,
+          "prompt_eval_s": 0.45471304999999995,
+          "output_tokens": 256,
+          "cache_hit_tokens": 0,
+          "skipped": null
+        },
+        {
+          "depth_requested": 8192,
+          "depth_actual": 6894,
+          "prefill_tps": 531.4634797551663,
+          "decode_tps": 11.929386478982032,
+          "ttft_s": 12.448654940992128,
+          "prompt_eval_s": 12.971728562000001,
+          "output_tokens": 256,
+          "cache_hit_tokens": 0,
+          "skipped": null
+        },
+        {
+          "depth_requested": 32768,
+          "depth_actual": 27374,
+          "prefill_tps": 512.2024522010528,
+          "decode_tps": 11.132921074638375,
+          "ttft_s": 52.82993392102071,
+          "prompt_eval_s": 53.443711334,
+          "output_tokens": 256,
+          "cache_hit_tokens": 0,
+          "skipped": null
+        }
+      ],
+      "error": null,
+      "warnings": []
+    }
+  ]
+}

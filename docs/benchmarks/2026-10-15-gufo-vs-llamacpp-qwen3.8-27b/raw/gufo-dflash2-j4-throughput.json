@@ -1,0 +1,46 @@
+[
+  {
+    "model": "qwen3.8-27b-gufo",
+    "provider": "openai",
+    "peak_aggregate_tps": 49.84053814292348,
+    "points": [
+      {
+        "concurrency": 1,
+        "requests": 4,
+        "completed": 4,
+        "errors": 0,
+        "total_output_tokens": 929,
+        "wall_s": 33.3130210560048,
+        "aggregate_tps": 27.886993450344672,
+        "mean_req_tps": 28.050125798256243,
+        "mean_latency_s": 8.327899341245939,
+        "p95_latency_s": 9.73165949198301
+      },
+      {
+        "concurrency": 2,
+        "requests": 6,
+        "completed": 6,
+        "errors": 0,
+        "total_output_tokens": 1435,
+        "wall_s": 36.91161541399197,
+        "aggregate_tps": 38.87665126289865,
+        "mean_req_tps": 20.5595007665014,
+        "mean_latency_s": 11.726059947327789,
+        "p95_latency_s": 13.427753144991584
+      },
+      {
+        "concurrency": 4,
+        "requests": 12,
+        "completed": 12,
+        "errors": 0,
+        "total_output_tokens": 2857,
+        "wall_s": 57.322816054016585,
+        "aggregate_tps": 49.84053814292348,
+        "mean_req_tps": 12.836183999683728,
+        "mean_latency_s": 18.688004107913002,
+        "p95_latency_s": 21.23682282998925
+      }
+    ],
+    "error": null
+  }
+]

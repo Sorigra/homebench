@@ -1,0 +1,396 @@
+{
+  "provider": "openai",
+  "started_at": 1792114454.6799953,
+  "finished_at": 1792114540.190115,
+  "config": {
+    "max_tokens": 256,
+    "speed_max_tokens": 100,
+    "temperature": 0.0,
+    "seed": 42,
+    "repeat": 1,
+    "depths": [
+      0,
+      8192,
+      32768
+    ],
+    "warmup": true,
+    "unload_between": true,
+    "sample_rss": true,
+    "include_open": false,
+    "judge_model": null,
+    "run_quality": true,
+    "run_speed": false,
+    "quick": false,
+    "load_params": {}
+  },
+  "environment": {
+    "homebench_version": "0.13.4",
+    "hardware": {
+      "os": "Linux",
+      "os_version": "7.0.0-38-generic",
+      "arch": "x86_64",
+      "cpu": "x86_64",
+      "cpu_cores": 32,
+      "ram_total_bytes": 130153127936,
+      "ram_available_bytes": 62799974400,
+      "is_apple_silicon": false,
+      "unified_memory": false,
+      "python_version": "3.14.4",
+      "gpu": {
+        "name": "",
+        "vram_bytes": 0,
+        "kind": ""
+      }
+    }
+  },
+  "reports": [
+    {
+      "model": {
+        "name": "qwen3.8-27b-gufo",
+        "provider": "openai",
+        "size_bytes": 0,
+        "parameter_size": "",
+        "quantization": "",
+        "family": "",
+        "digest": ""
+      },
+      "speed": {
+        "ttft_s": 0.0,
+        "tokens_per_sec": 0.0,
+        "prompt_tokens": 0,
+        "output_tokens": 0,
+        "prompt_eval_s": 0.0,
+        "eval_s": 0.0,
+        "load_s": 0.0,
+        "total_s": 0.0,
+        "content_tokens": 0,
+        "reasoning_tokens": 0,
+        "prefill_tps": null,
+        "timings_source": "client"
+      },
+      "memory": {
+        "size_bytes": 0,
+        "vram_bytes": 0,
+        "rss_peak_bytes": 23842816
+      },
+      "quality_score": 100.0,
+      "tasks_passed": 31,
+      "tasks_total": 31,
+      "task_results": [
+        {
+          "task_id": "math_mult",
+          "category": "math",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 1.881826639000792,
+          "output_tokens": 92,
+          "response": "17 \u00d7 23 = 17 \u00d7 20 + 17 \u00d7 3 = 340 + 51 = 391\n\n391",
+          "detail": "got 391.0, expected 391"
+        },
+        {
+          "task_id": "math_word",
+          "category": "math",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 3.8522812479932327,
+          "output_tokens": 155,
+          "response": "The store started with 48 apples. It sold three quarters: 48 \u00d7 3/4 = 36 apples, leaving 12. Then it received 15 more: 12 + 15 = 27.\n\n27",
+          "detail": "got 27.0, expected 27"
+        },
+        {
+          "task_id": "math_rate",
+          "category": "math",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 1.791801488987403,
+          "output_tokens": 62,
+          "response": "Average speed = distance \u00f7 time = 60 miles \u00f7 1.5 hours = 40 miles per hour.\n\n40",
+          "detail": "got 40.0, expected 40"
+        },
+        {
+          "task_id": "math_percent",
+          "category": "math",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 2.443898382014595,
+          "output_tokens": 121,
+          "response": "15% of 240 = 0.15 \u00d7 240 = 36\n\n36",
+          "detail": "got 36.0, expected 36"
+        },
+        {
+          "task_id": "math_algebra",
+          "category": "math",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 2.289577660994837,
+          "output_tokens": 106,
+          "response": "To solve 3x + 7 = 22:\n\nSubtract 7 from both sides: 3x = 15\nDivide both sides by 3: x = 5\n\n5",
+          "detail": "got 5.0, expected 5"
+        },
+        {
+          "task_id": "math_sum",
+          "category": "math",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 2.883254954998847,
+          "output_tokens": 124,
+          "response": "The sum of all integers from 1 to 10 is found using the formula n(n+1)/2 = 10 \u00d7 11 / 2 = 55.\n\n55",
+          "detail": "got 55.0, expected 55"
+        },
+        {
+          "task_id": "math_scale",
+          "category": "math",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 2.625165809004102,
+          "output_tokens": 95,
+          "response": "To find the total cups of flour needed, multiply the amount per loaf by the number of loaves:\n\n2.5 cups/loave \u00d7 4 loaves = 10 cups\n\n10",
+          "detail": "got 10.0, expected 10"
+        },
+        {
+          "task_id": "reason_seq",
+          "category": "reasoning",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 2.5547902029938996,
+          "output_tokens": 129,
+          "response": "B",
+          "detail": "chose B, expected B"
+        },
+        {
+          "task_id": "reason_logic",
+          "category": "reasoning",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 6.6098939240037,
+          "output_tokens": 243,
+          "response": "C",
+          "detail": "chose C, expected C"
+        },
+        {
+          "task_id": "reason_syllogism",
+          "category": "reasoning",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 2.774612084002001,
+          "output_tokens": 106,
+          "response": "A",
+          "detail": "chose A, expected A"
+        },
+        {
+          "task_id": "reason_odd",
+          "category": "reasoning",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 2.0470005870156456,
+          "output_tokens": 78,
+          "response": "C",
+          "detail": "chose C, expected C"
+        },
+        {
+          "task_id": "reason_order",
+          "category": "reasoning",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 1.2924993409833405,
+          "output_tokens": 31,
+          "response": "Bob",
+          "detail": "matched 'bob'"
+        },
+        {
+          "task_id": "reason_time",
+          "category": "reasoning",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 2.1748688359803054,
+          "output_tokens": 98,
+          "response": "4:15",
+          "detail": "matched '4:15'"
+        },
+        {
+          "task_id": "fact_capital",
+          "category": "factual",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 1.4309507560101338,
+          "output_tokens": 39,
+          "response": "Canberra",
+          "detail": "matched 'canberra'"
+        },
+        {
+          "task_id": "fact_element",
+          "category": "factual",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 1.7926769079931546,
+          "output_tokens": 51,
+          "response": "Iron",
+          "detail": "matched 'iron'"
+        },
+        {
+          "task_id": "fact_planets",
+          "category": "factual",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 2.7978155619930476,
+          "output_tokens": 91,
+          "response": "8",
+          "detail": "matched '8'"
+        },
+        {
+          "task_id": "fact_water",
+          "category": "factual",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 1.2048692060052417,
+          "output_tokens": 35,
+          "response": "H\u2082O",
+          "detail": "matched 'h\u2082o'"
+        },
+        {
+          "task_id": "fact_author",
+          "category": "factual",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 1.3234718740277458,
+          "output_tokens": 42,
+          "response": "William Shakespeare",
+          "detail": "matched 'shakespeare'"
+        },
+        {
+          "task_id": "fact_ocean",
+          "category": "factual",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 0.9683563270082232,
+          "output_tokens": 28,
+          "response": "Pacific Ocean",
+          "detail": "matched 'pacific'"
+        },
+        {
+          "task_id": "format_json",
+          "category": "format",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 1.6805836700077634,
+          "output_tokens": 61,
+          "response": "{\"name\":\"Alice\",\"age\":30}",
+          "detail": "valid JSON with required keys"
+        },
+        {
+          "task_id": "format_colors",
+          "category": "format",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 8.286730716004968,
+          "output_tokens": 268,
+          "response": "{\"colors\": [\"red\", \"green\", \"blue\"]}",
+          "detail": "valid JSON with required keys"
+        },
+        {
+          "task_id": "format_array",
+          "category": "format",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 1.4632817000092473,
+          "output_tokens": 59,
+          "response": "[1, 2, 3]",
+          "detail": "valid JSON array (len 3)"
+        },
+        {
+          "task_id": "format_upper",
+          "category": "format",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 1.66818426901591,
+          "output_tokens": 45,
+          "response": "HELLO",
+          "detail": "pattern 'HELLO'"
+        },
+        {
+          "task_id": "extract_email",
+          "category": "extraction",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 1.5615655069996137,
+          "output_tokens": 40,
+          "response": "support@example.com",
+          "detail": "pattern 'support@example\\\\.com'"
+        },
+        {
+          "task_id": "extract_year",
+          "category": "extraction",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 1.4587480100162793,
+          "output_tokens": 58,
+          "response": "1998",
+          "detail": "got 1998.0, expected 1998"
+        },
+        {
+          "task_id": "extract_name",
+          "category": "extraction",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 5.310109412006568,
+          "output_tokens": 204,
+          "response": "Maria Chen",
+          "detail": "matched 'maria chen'"
+        },
+        {
+          "task_id": "code_eval",
+          "category": "code",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 3.684824222000316,
+          "output_tokens": 134,
+          "response": "The expression `len('hello') + 2` evaluates as follows:\n\n- `len('hello')` returns the number of characters in the string `'hello'`, which is **5**.\n- Then we add 2: `5 + 2 = 7`.\n\n7",
+          "detail": "got 7.0, expected 7"
+        },
+        {
+          "task_id": "code_pow",
+          "category": "code",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 3.432659716985654,
+          "output_tokens": 146,
+          "response": "The code `print(2 ** 5)` uses Python's exponentiation operator `**` to raise 2 to the power of 5.\n\n2\u2075 = 2 \u00d7 2 \u00d7 2 \u00d7 2 \u00d7 2 = 32\n\n32",
+          "detail": "got 32.0, expected 32"
+        },
+        {
+          "task_id": "code_len",
+          "category": "code",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 5.102057192998473,
+          "output_tokens": 221,
+          "response": "The `len()` function in Python returns the number of **top-level** elements in a list. It does not recurse into nested structures.\n\nIn the list `[1, [2, 3], 4]`, there are three top-level elements:\n1. `1`\n2. `[2, 3]` (counted as a single element)\n3. `4`\n\n3",
+          "detail": "got 3.0, expected 3"
+        },
+        {
+          "task_id": "code_listcomp",
+          "category": "code",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 4.54327212300268,
+          "output_tokens": 225,
+          "response": "This is a list comprehension that iterates over `range(4)` (which yields 0, 1, 2, 3) and doubles each value.\n\n- 0 * 2 = 0\n- 1 * 2 = 2\n- 2 * 2 = 4\n- 3 * 2 = 6\n\n[0, 2, 4, 6]",
+          "detail": "pattern '\\\\[\\\\s*0\\\\s*,\\\\s*2\\\\s*,\\\\s*4\\\\s*,\\\\s*6\\\\s*\\\\]'"
+        },
+        {
+          "task_id": "code_str",
+          "category": "code",
+          "score": 1.0,
+          "passed": true,
+          "latency_s": 2.1911816869978793,
+          "output_tokens": 55,
+          "response": "ababab",
+          "detail": "matched 'ababab'"
+        }
+      ],
+      "depth_results": [],
+      "error": null,
+      "warnings": []
+    }
+  ]
+}

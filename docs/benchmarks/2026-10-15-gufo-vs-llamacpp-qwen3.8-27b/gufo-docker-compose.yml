@@ -1,0 +1,47 @@
+# Teste do gufo (engine Strix Halo) com o Qwen3.8 27B Q4 + DFlash2.
+# Só escuta em localhost, sem Traefik e sem restart automático.
+services:
+  gufo:
+    image: ghcr.io/gufo-org/toolboxes/gufo-runtime@sha256:324d178fcb2b9aa0aca7a4c3d2eddc8897634432cb248917b7a0217ac9da59e0 # v0.15.1
+    container_name: gufo
+    restart: "no"
+    ports:
+      - "127.0.0.1:8090:8080"
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    group_add: ["991", "44", "27"]
+    security_opt:
+      - seccomp=unconfined
+    ulimits:
+      memlock: -1
+    volumes:
+      - /home/eskudo/ai-models:/models:ro
+    entrypoint: ["gufo"]
+    command:
+      - serve
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8080"
+      - --sessions
+      - "${GUFO_SESSIONS:-1}"
+      - llm
+      - --model
+      - /models/qwen3.8-27b-unsloth/Qwen3.8-27B-UD-Q4_K_XL.gguf
+      - --served-model-name
+      - qwen3.8-27b-gufo
+      - --context
+      - "131072"
+      - --speculative
+      - "${GUFO_SPEC:-dflash2}"
+      - --dflash-model
+      - /models/qwen3.8-27b-dflash2/Qwen3.8-27B-DFlash2-Q4_K_M.gguf
+      - --temperature
+      - "1.0"
+      - --top-p
+      - "0.95"
+      - --top-k
+      - "20"
+      - --reasoning-effort
+      - medium
